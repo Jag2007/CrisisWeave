@@ -19,6 +19,7 @@ type Summary = {
   busyResources: number;
   totalDispatches: number;
   totalAlerts: number;
+  totalAgentTraces: number;
   recentSystemLogs: Array<{ _id: string; eventType: string; message: string; createdAt: string }>;
 };
 
@@ -93,6 +94,7 @@ export default function DashboardPage() {
         <MetricCard label="Busy Resources" value={summary?.busyResources ?? "-"} />
         <MetricCard label="Dispatches" value={summary?.totalDispatches ?? "-"} />
         <MetricCard label="Alerts" value={summary?.totalAlerts ?? "-"} />
+        <MetricCard label="Agent Decisions" value={summary?.totalAgentTraces ?? "-"} detail="Reasoning steps stored" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

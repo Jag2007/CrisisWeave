@@ -1,4 +1,4 @@
-import { Alert, Dispatch, Incident, IncomingCall, Resource, SystemLog, UploadBatch } from "../models";
+import { AgentTrace, Alert, Dispatch, Incident, IncomingCall, Resource, SystemLog, UploadBatch } from "../models";
 
 async function groupCount(model: typeof Incident, field: string, match = {}) {
   return model.aggregate([
@@ -22,6 +22,7 @@ export async function getDashboardSummary() {
     busyResources,
     totalDispatches,
     totalAlerts,
+    totalAgentTraces,
     recentSystemLogs
   ] = await Promise.all([
     UploadBatch.countDocuments(),
@@ -34,6 +35,7 @@ export async function getDashboardSummary() {
     Resource.countDocuments({ status: "BUSY" }),
     Dispatch.countDocuments(),
     Alert.countDocuments(),
+    AgentTrace.countDocuments(),
     SystemLog.find().sort({ createdAt: -1 }).limit(15).lean()
   ]);
 
@@ -48,6 +50,7 @@ export async function getDashboardSummary() {
     busyResources,
     totalDispatches,
     totalAlerts,
+    totalAgentTraces,
     recentSystemLogs
   };
 }

@@ -4,6 +4,22 @@ CrisisWeave is a hackathon prototype that turns uploaded emergency transcript JS
 
 This is not a real phone-call or alerting system. Inputs are uploaded JSON files, and alerts are database records for demo visibility.
 
+The backend now runs as an agentic execution graph:
+
+```text
+Goal
+→ Plan
+→ Triage Agent
+→ Dedup Agent
+→ Priority Agent
+→ Resource Agent
+→ Routing Agent
+→ Dispatch Agent
+→ Critic Agent
+→ Refine resource/dispatch if needed
+→ Persist trace memory
+```
+
 ## Project Structure
 
 ```text
@@ -84,6 +100,7 @@ JSON upload
 - `GET /api/resources`
 - `GET /api/dispatches`
 - `GET /api/alerts`
+- `GET /api/agent-traces`
 - `GET /api/system-logs`
 - `GET /api/upload-batches`
 - `POST /api/admin/seed`
@@ -99,12 +116,14 @@ List endpoints support `page`, `limit`, `status`, `severity`, `incidentType`, `r
 - `resources`: available/busy Hyderabad response units
 - `dispatches`: dispatch decisions and ETA outputs
 - `alerts`: simulated alert records
+- `agent_traces`: every agent input, output, reasoning, decision, and critique
 - `system_logs`: explainable pipeline audit trail
 - `users`: basic admin/staff seed users for future auth
 
 ## Notes
 
 - The prototype works without AI API keys.
+- Agent reasoning currently uses structured deterministic reasoning templates, with `GEMINI_API_KEY` and `GROQ_API_KEY` placeholders reserved for optional LLM-backed reasoning.
 - No real SMS/email/phone alerts are sent.
 - Authentication is intentionally not implemented yet, per current scope.
 - MongoDB geospatial fields use GeoJSON points with `2dsphere` indexes.

@@ -12,6 +12,7 @@ type Detail = {
   assignedResources: any[];
   dispatches: any[];
   alerts: any[];
+  agentTraces: any[];
 };
 
 export default function IncidentDetailPage() {
@@ -51,6 +52,20 @@ export default function IncidentDetailPage() {
           <div className="rounded-md bg-slate-50 p-3"><p className="text-xs text-slate-500">Resources</p><p className="text-xl font-bold">{detail.assignedResources.length}</p></div>
           <div className="rounded-md bg-slate-50 p-3"><p className="text-xs text-slate-500">Alerts</p><p className="text-xl font-bold">{detail.alerts.length}</p></div>
         </div>
+      </section>
+
+      <section>
+        <h3 className="mb-3 text-lg font-bold text-ink">Agent execution trace</h3>
+        <DataTable
+          rows={detail.agentTraces}
+          columns={[
+            { key: "step", label: "Step", render: (row: any) => `${row.stepIndex}${row.retryAttempt ? ` / retry ${row.retryAttempt}` : ""}` },
+            { key: "agent", label: "Agent", render: (row: any) => <Badge value={row.agentName} /> },
+            { key: "decision", label: "Decision", render: (row: any) => row.decision },
+            { key: "reasoning", label: "Reasoning", render: (row: any) => row.reasoning },
+            { key: "critique", label: "Critique", render: (row: any) => row.critique || "-" }
+          ]}
+        />
       </section>
 
       <section>

@@ -1,4 +1,5 @@
 export * from "./alert.model";
+export * from "./agentTrace.model";
 export * from "./dispatch.model";
 export * from "./incident.model";
 export * from "./incomingCall.model";

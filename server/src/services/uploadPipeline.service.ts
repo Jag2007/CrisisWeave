@@ -1,11 +1,6 @@
-import { IncomingCall, Incident, UploadBatch } from "../models";
+import { IncomingCall, UploadBatch } from "../models";
+import { executeGraph } from "../graph/agentGraph";
 import type { EmergencyTranscriptInput, NormalizedTranscriptRecord } from "../types/upload";
-import { generateCode } from "../utils/codeGenerator";
-import { calculatePriorityScore } from "./priority.service";
-import { findDuplicateIncident } from "./deduplication.service";
-import { assignResourcesForIncident } from "./dispatch.service";
-import { generateIncidentAlerts } from "./alert.service";
-import { triageTranscript } from "./triage.service";
 import { writeSystemLog } from "./systemLog.service";
 
 function parseNumber(value: unknown): number | undefined {
@@ -78,7 +73,7 @@ export async function processUploadedJson(input: {
     eventType: "BATCH_UPLOADED",
     message: `${records.length} transcript records uploaded from ${input.originalFileName}.`,
     batchId: batch._id,
-    metadata: { originalFileName: input.originalFileName }
+    metadata: { originalFileName: input.originalFileName, executionMode: "agent_graph" }
   });
 
   let processedRecords = 0;
@@ -100,175 +95,24 @@ export async function processUploadedJson(input: {
 
       await writeSystemLog({
         eventType: "CALL_STORED",
-        message: "Raw transcript stored as incoming call.",
+        message: "Raw transcript stored as incoming call before agent graph execution.",
         batchId: batch._id,
         incomingCallId: incomingCall._id,
         metadata: { sourceId: record.sourceId }
       });
 
-      await writeSystemLog({
-        eventType: "TRIAGE_STARTED",
-        message: "Rule-based triage started.",
-        batchId: batch._id,
-        incomingCallId: incomingCall._id
-      });
-
-      const triage = triageTranscript(record.rawTranscript);
-      await incomingCall.updateOne({
-        $set: {
-          extractedData: {
-            ...triage,
-            locationText: record.locationText,
-            city: record.city,
-            state: record.state,
-            latitude: record.latitude,
-            longitude: record.longitude
-          },
-          processingStatus: "EXTRACTED"
-        }
-      });
-
-      await writeSystemLog({
-        eventType: "TRIAGE_COMPLETED",
-        message: `Triage completed: ${triage.incidentType}/${triage.severity}.`,
+      const graphResult = await executeGraph({
         batchId: batch._id,
         incomingCallId: incomingCall._id,
-        metadata: triage as unknown as Record<string, unknown>
+        record
       });
 
-      await writeSystemLog({
-        eventType: "DEDUP_CHECK_STARTED",
-        message: "Checking for nearby active duplicate incidents.",
-        batchId: batch._id,
-        incomingCallId: incomingCall._id,
-        metadata: { incidentType: triage.incidentType }
-      });
-
-      const reportedAt = record.callDate || new Date();
-      const duplicateIncident = await findDuplicateIncident({
-        incidentType: triage.incidentType,
-        latitude: record.latitude,
-        longitude: record.longitude,
-        city: record.city,
-        state: record.state,
-        reportedAt
-      });
-
-      if (duplicateIncident) {
-        const nextDuplicateCount = duplicateIncident.duplicateCount + 1;
-        const priorityScore = calculatePriorityScore({
-          severity: duplicateIncident.severity,
-          incidentType: duplicateIncident.incidentType,
-          duplicateCount: nextDuplicateCount,
-          keywords: triage.keywords,
-          requiredResourceTypes: duplicateIncident.requiredResourceTypes
-        });
-
-        await Incident.updateOne(
-          { _id: duplicateIncident._id },
-          {
-            $addToSet: { incomingCallIds: incomingCall._id },
-            $set: {
-              duplicateCount: nextDuplicateCount,
-              lastUpdatedFromCallAt: reportedAt,
-              priorityScore
-            }
-          }
-        );
-
-        await incomingCall.updateOne({
-          $set: {
-            linkedIncidentId: duplicateIncident._id,
-            duplicateOfIncidentId: duplicateIncident._id,
-            isDuplicate: true,
-            processingStatus: "DUPLICATE"
-          }
-        });
-
-        duplicatesFound += 1;
-
-        await writeSystemLog({
-          eventType: "DUPLICATE_FOUND",
-          message: `Incoming call matched existing incident ${duplicateIncident.incidentCode}.`,
-          batchId: batch._id,
-          incomingCallId: incomingCall._id,
-          incidentId: duplicateIncident._id
-        });
-
-        await writeSystemLog({
-          eventType: "INCIDENT_UPDATED",
-          message: `${duplicateIncident.incidentCode} updated with duplicate report and priority ${priorityScore}.`,
-          batchId: batch._id,
-          incomingCallId: incomingCall._id,
-          incidentId: duplicateIncident._id,
-          metadata: { duplicateCount: nextDuplicateCount, priorityScore }
-        });
-
-        await writeSystemLog({
-          eventType: "PRIORITY_ASSIGNED",
-          message: `${duplicateIncident.incidentCode} priority score refreshed to ${priorityScore}.`,
-          batchId: batch._id,
-          incomingCallId: incomingCall._id,
-          incidentId: duplicateIncident._id,
-          metadata: { priorityScore }
-        });
-      } else {
-        const priorityScore = calculatePriorityScore({
-          severity: triage.severity,
-          incidentType: triage.incidentType,
-          duplicateCount: 0,
-          keywords: triage.keywords,
-          requiredResourceTypes: triage.requiredResourceTypes
-        });
-
-        const incident = await Incident.create({
-          incidentCode: generateCode("INC"),
-          title: triage.title,
-          description: triage.description,
-          incidentType: triage.incidentType,
-          severity: triage.severity,
-          priorityScore,
-          status: "NEW",
-          locationText: record.locationText,
-          city: record.city,
-          state: record.state,
-          latitude: record.latitude,
-          longitude: record.longitude,
-          requiredResourceTypes: triage.requiredResourceTypes,
-          incomingCallIds: [incomingCall._id],
-          duplicateCount: 0,
-          firstReportedAt: reportedAt,
-          lastUpdatedFromCallAt: reportedAt
-        });
-
-        await incomingCall.updateOne({
-          $set: {
-            linkedIncidentId: incident._id,
-            processingStatus: "INCIDENT_CREATED"
-          }
-        });
-
+      if (graphResult.incidentCreated) {
         incidentsCreated += 1;
+      }
 
-        await writeSystemLog({
-          eventType: "INCIDENT_CREATED",
-          message: `${incident.incidentCode} created from incoming call.`,
-          batchId: batch._id,
-          incomingCallId: incomingCall._id,
-          incidentId: incident._id
-        });
-
-        await writeSystemLog({
-          eventType: "PRIORITY_ASSIGNED",
-          message: `${incident.incidentCode} priority score set to ${priorityScore}.`,
-          batchId: batch._id,
-          incomingCallId: incomingCall._id,
-          incidentId: incident._id,
-          metadata: { priorityScore }
-        });
-
-        await assignResourcesForIncident(incident);
-        await generateIncidentAlerts(incident);
+      if (graphResult.duplicateFound) {
+        duplicatesFound += 1;
       }
 
       processedRecords += 1;
@@ -302,9 +146,9 @@ export async function processUploadedJson(input: {
 
   await writeSystemLog({
     eventType: failedRecords > 0 ? "PIPELINE_FAILED" : "PIPELINE_COMPLETED",
-    message: `Batch ${batch._id.toString()} completed with ${processedRecords} processed and ${failedRecords} failed.`,
+    message: `Agent graph batch ${batch._id.toString()} completed with ${processedRecords} processed and ${failedRecords} failed.`,
     batchId: batch._id,
-    metadata: { incidentsCreated, duplicatesFound }
+    metadata: { incidentsCreated, duplicatesFound, executionMode: "agent_graph" }
   });
 
   return {

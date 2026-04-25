@@ -10,6 +10,7 @@ const collections = [
   { label: "Resources", endpoint: "/resources" },
   { label: "Dispatches", endpoint: "/dispatches" },
   { label: "Alerts", endpoint: "/alerts" },
+  { label: "Agent Traces", endpoint: "/agent-traces" },
   { label: "System Logs", endpoint: "/system-logs" }
 ];
 

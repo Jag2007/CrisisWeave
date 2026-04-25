@@ -5,6 +5,7 @@ import type React from "react";
 import { usePathname } from "next/navigation";
 import {
   AlertTriangle,
+  BrainCircuit,
   Database,
   FileJson,
   Gauge,
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/resources", label: "Resources", icon: Truck },
   { href: "/dispatches", label: "Dispatches", icon: Route },
   { href: "/alerts", label: "Alerts", icon: AlertTriangle },
+  { href: "/agent-traces", label: "Agent Traces", icon: BrainCircuit },
   { href: "/system-logs", label: "System Logs", icon: ScrollText },
   { href: "/upload-batches", label: "Upload Batches", icon: ListChecks },
   { href: "/data-viewer", label: "Data Viewer", icon: Database }

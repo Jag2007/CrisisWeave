@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { Alert, Dispatch, Incident, IncomingCall, Resource } from "../models";
+import { AgentTrace, Alert, Dispatch, Incident, IncomingCall, Resource } from "../models";
 import { listDocuments, listModels } from "../services/query.service";
 
 export function createListHandler(modelName: keyof typeof listModels) {
@@ -36,7 +36,8 @@ export async function incidentDetail(req: Request, res: Response, next: NextFunc
         incomingCalls,
         assignedResources,
         dispatches,
-        alerts
+        alerts,
+        agentTraces: await AgentTrace.find({ incidentId: incident._id }).sort({ stepIndex: 1 }).lean()
       }
     });
   } catch (error) {

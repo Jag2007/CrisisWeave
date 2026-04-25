@@ -1,8 +1,18 @@
 import type { Request } from "express";
 import type { FilterQuery, Model } from "mongoose";
-import { Alert, Dispatch, Incident, IncomingCall, Resource, SystemLog, UploadBatch } from "../models";
+import { AgentTrace, Alert, Dispatch, Incident, IncomingCall, Resource, SystemLog, UploadBatch } from "../models";
 
-const allowedFilters = new Set(["status", "severity", "incidentType", "resourceType", "batchId"]);
+const allowedFilters = new Set([
+  "status",
+  "severity",
+  "incidentType",
+  "resourceType",
+  "batchId",
+  "incomingCallId",
+  "incidentId",
+  "graphRunId",
+  "agentName"
+]);
 
 export function getPagination(req: Request): { page: number; limit: number; skip: number } {
   const page = Math.max(1, Number(req.query.page || 1));
@@ -48,5 +58,6 @@ export const listModels = {
   resources: Resource,
   dispatches: Dispatch,
   alerts: Alert,
+  agentTraces: AgentTrace,
   systemLogs: SystemLog
 };

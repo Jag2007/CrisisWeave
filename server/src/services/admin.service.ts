@@ -1,9 +1,10 @@
-import { Alert, Dispatch, Incident, IncomingCall, Resource, SystemLog, UploadBatch, User } from "../models";
+import { AgentTrace, Alert, Dispatch, Incident, IncomingCall, Resource, SystemLog, UploadBatch, User } from "../models";
 import { seedDatabase } from "./seed.service";
 
 export async function resetDemoData(): Promise<void> {
   await Promise.all([
     Alert.deleteMany({}),
+    AgentTrace.deleteMany({}),
     Dispatch.deleteMany({}),
     Incident.deleteMany({}),
     IncomingCall.deleteMany({}),

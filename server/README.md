@@ -4,6 +4,8 @@ Node.js/Express/MongoDB API for **CrisisWeave - Smart City Dynamic Dispatch Grid
 
 This backend accepts uploaded JSON transcript bundles, stores raw calls, runs deterministic triage, deduplicates nearby active incidents, scores priority, assigns Hyderabad resources, creates dispatches, generates simulated alert records, and logs every pipeline step.
 
+The pipeline is now agentic: each call runs through Triage, Dedup, Priority, Resource, Routing, Dispatch, and Critic agents. Agent memory is persisted in `agent_traces`.
+
 ## Tech Stack
 
 - Node.js
@@ -22,6 +24,8 @@ MONGODB_DB_NAME=crisisweave_db
 PORT=4000
 DEDUP_RADIUS_KM=1
 DEDUP_WINDOW_MINUTES=60
+GEMINI_API_KEY=
+GROQ_API_KEY=
 SEED_ADMIN_EMAIL=admin@crisisweave.local
 SEED_ADMIN_PASSWORD=change-me-admin-password
 SEED_STAFF_EMAIL=staff@crisisweave.local
@@ -64,6 +68,7 @@ Main API endpoints:
 - `GET /api/resources`
 - `GET /api/dispatches`
 - `GET /api/alerts`
+- `GET /api/agent-traces`
 - `GET /api/system-logs`
 - `GET /api/upload-batches`
 - `POST /api/admin/seed`
@@ -142,6 +147,10 @@ Indexes:
 ### `system_logs`
 
 Stores human-readable pipeline events for demos, audits, and debugging.
+
+### `agent_traces`
+
+Stores agent graph memory: agent name, goal, input, output, reasoning, decision, optional critique, graph run ID, retry attempt, and related batch/call/incident references.
 
 Indexes:
 

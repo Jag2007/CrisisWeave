@@ -84,6 +84,16 @@ export const USER_ROLES = ["ADMIN", "STAFF"] as const;
 
 export const USER_STATUSES = ["ACTIVE", "DISABLED"] as const;
 
+export const AGENT_NAMES = [
+  "TRIAGE_AGENT",
+  "DEDUP_AGENT",
+  "PRIORITY_AGENT",
+  "RESOURCE_AGENT",
+  "ROUTING_AGENT",
+  "DISPATCH_AGENT",
+  "CRITIC_AGENT"
+] as const;
+
 export type UploadBatchStatus = (typeof UPLOAD_BATCH_STATUSES)[number];
 export type CallProcessingStatus = (typeof CALL_PROCESSING_STATUSES)[number];
 export type IncidentType = (typeof INCIDENT_TYPES)[number];
@@ -97,3 +107,4 @@ export type AlertStatus = (typeof ALERT_STATUSES)[number];
 export type SystemEventType = (typeof SYSTEM_EVENT_TYPES)[number];
 export type UserRole = (typeof USER_ROLES)[number];
 export type UserStatus = (typeof USER_STATUSES)[number];
+export type AgentName = (typeof AGENT_NAMES)[number];

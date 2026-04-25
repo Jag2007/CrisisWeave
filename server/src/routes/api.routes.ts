@@ -22,6 +22,7 @@ apiRouter.get("/incidents/:id", incidentDetail);
 apiRouter.get("/resources", createListHandler("resources"));
 apiRouter.get("/dispatches", createListHandler("dispatches"));
 apiRouter.get("/alerts", createListHandler("alerts"));
+apiRouter.get("/agent-traces", createListHandler("agentTraces"));
 apiRouter.get("/system-logs", createListHandler("systemLogs"));
 apiRouter.get("/upload-batches", createListHandler("uploadBatches"));
 
