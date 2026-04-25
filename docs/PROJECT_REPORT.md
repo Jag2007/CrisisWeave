@@ -22,8 +22,8 @@ Traditional dispatch systems are usually rule-heavy and opaque. CrisisWeave demo
 
 The prototype is designed to use API keys:
 
-1. Gemini API is the primary reasoning provider.
-2. Groq API is the fallback reasoning provider.
+1. Groq API is the primary reasoning provider.
+2. OpenAI API is the fallback reasoning provider.
 3. Local deterministic logic is retained only as final resilience fallback.
 
 This gives the demo real AI reasoning when keys are configured and prevents total failure if a provider is down.
@@ -46,7 +46,7 @@ This gives the demo real AI reasoning when keys are configured and prevents tota
 14. Alert service creates simulated alert records.
 15. `system_logs` records high-level pipeline events.
 16. `agent_traces` records agent input, output, reasoning, decision, critique, graph run ID, and retry attempt.
-17. The dashboard displays operational data and explainable agent traces.
+17. The dashboard polls the backend every few seconds to display live operational data, live ETA text, and explainable agent traces even after the user leaves the upload page.
 
 ## Agents
 
@@ -58,7 +58,7 @@ Input: transcript text plus optional location metadata.
 
 Output: incident type, severity, title, description, location, required resources, keywords, reasoning, decision.
 
-Primary reasoning: Gemini/Groq structured JSON extraction.
+Primary reasoning: Groq/OpenAI structured JSON extraction.
 
 Fallback: local keyword-based triage rules.
 
@@ -70,7 +70,7 @@ Input: structured report, candidate active incidents, deterministic proximity hi
 
 Output: duplicate flag, matched incident ID, matched incident code, confidence score, reasoning, decision.
 
-Primary reasoning: Gemini/Groq semantic comparison.
+Primary reasoning: Groq/OpenAI semantic comparison.
 
 Fallback: same type, nearby location, recent time window, active status.
 
@@ -82,7 +82,7 @@ Input: severity, incident type, duplicate count, keywords, required resources.
 
 Output: score, explanation, reasoning, decision.
 
-Primary reasoning: Gemini/Groq priority judgment.
+Primary reasoning: Groq/OpenAI priority judgment.
 
 Fallback: weighted score from severity, type, duplicates, keywords, and resource count.
 
@@ -94,7 +94,7 @@ Input: incident details, available resources, resource capabilities, distance, s
 
 Output: ranked resources by type, missing resource types, reasoning, decision.
 
-Primary reasoning: Gemini/Groq ranking over safe candidate resources.
+Primary reasoning: Groq/OpenAI ranking over safe candidate resources.
 
 Fallback: deterministic match score using type, status, capability, severity, and distance.
 
@@ -106,7 +106,7 @@ Input: selected resource candidates.
 
 Output: route summaries, distance, ETA, reasoning, decision.
 
-Primary reasoning: Gemini/Groq explanation of computed route estimates.
+Primary reasoning: Groq/OpenAI explanation of computed route estimates.
 
 Fallback: haversine distance and resource-type speed.
 
@@ -118,7 +118,7 @@ Input: ranked resources and route estimates.
 
 Output: final dispatch decisions, missing resource types, reasoning, decision.
 
-Primary reasoning: Gemini/Groq selection from validated ranked candidates.
+Primary reasoning: Groq/OpenAI selection from validated ranked candidates.
 
 Fallback: top-ranked available resource per required type.
 
@@ -130,7 +130,7 @@ Input: severity, required resource types, dispatches, missing resources, retry a
 
 Output: optimal flag, improvement suggestions, refinement hints, reasoning, decision.
 
-Primary reasoning: Gemini/Groq critique.
+Primary reasoning: Groq/OpenAI critique.
 
 Fallback: deterministic checks for missing resources and slow critical ETAs.
 
@@ -170,7 +170,7 @@ Thin request/response layer. Business decisions stay in services and agents.
 
 ### `server/src/services/uploadPipeline.service.ts`
 
-Creates upload batches and incoming calls, then invokes `executeGraph` for each transcript.
+Creates upload batches immediately, then processes incoming calls through `executeGraph` in the background so dashboard navigation does not interrupt progress.
 
 ### `server/src/graph/agentGraph.ts`
 
@@ -182,11 +182,11 @@ Base class that standardizes agent name, goal, reasoning, decision, critique, an
 
 ### `server/src/agents/*.ts`
 
-Individual agent implementations. Each agent uses Gemini first, Groq second, and local fallback last.
+Individual agent implementations. Each agent uses Groq first, OpenAI second, and local fallback last.
 
 ### `server/src/services/llm.service.ts`
 
-LLM provider chain. Builds strict JSON prompts, calls Gemini/Groq, parses model responses, and falls back safely.
+LLM provider chain. Builds strict JSON prompts, calls Groq/OpenAI, parses model responses, and falls back safely.
 
 ### `server/src/services/triage.service.ts`
 
@@ -228,11 +228,11 @@ Enums, geospatial helpers, code generation, distance, and ETA utilities.
 
 ### `client/app/page.tsx`
 
-Main dashboard overview with metrics, seed/reset controls, incident groupings, and recent logs.
+Main dashboard overview with live metrics, seed/reset controls, incident groupings, and recent logs.
 
 ### `client/app/upload/page.tsx`
 
-Upload experience for JSON files or pasted JSON.
+Upload experience for JSON files or pasted JSON. It starts background processing and shows batch progress while other pages poll live data.
 
 ### `client/app/agent-traces/page.tsx`
 
@@ -260,7 +260,7 @@ Reusable status/severity/type badge.
 
 ### `client/components/ListPage.tsx`
 
-Reusable list-page loader and table wrapper.
+Reusable list-page loader and table wrapper with polling for live data updates.
 
 ### `client/lib/api.ts`
 
@@ -273,7 +273,7 @@ Date and ID formatting helpers.
 ## Demo Script
 
 1. Start backend and frontend.
-2. Confirm Gemini/Groq API keys are present in backend env.
+2. Confirm Groq/OpenAI API keys are present in backend env.
 3. Seed resources.
 4. Upload `data/samples/hyderabad-emergency-bundle.json`.
 5. Open Dashboard Overview.
@@ -285,6 +285,7 @@ Date and ID formatting helpers.
 
 - It is practical: emergency transcript bundles become operational dispatch decisions.
 - It is explainable: every agent decision is visible.
-- It is resilient: Gemini, then Groq, then local fallback.
+- It is resilient: Groq, then OpenAI, then local fallback.
 - It is agentic: the system plans, executes, critiques, and refines.
 - It is demo-ready: seed, upload, inspect dashboard.
+- It is easy to judge: the frontend uses Ant Design loaders/progress states and plain-language trace text.

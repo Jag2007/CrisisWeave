@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type React from "react";
+import { Empty } from "antd";
 import { Badge } from "./Badge";
 
 export type Column<T> = {
@@ -18,7 +19,11 @@ export function DataTable<T extends { _id?: string }>({
   empty?: string;
 }) {
   if (!rows.length) {
-    return <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">{empty}</div>;
+    return (
+      <div className="rounded-lg border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} />
+      </div>
+    );
   }
 
   return (
@@ -36,7 +41,7 @@ export function DataTable<T extends { _id?: string }>({
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((row, index) => (
-              <tr key={row._id || index} className="hover:bg-slate-50">
+              <tr key={row._id || index} className="transition-colors duration-150 hover:bg-slate-50">
                 {columns.map((column) => (
                   <td key={column.key} className="max-w-md px-4 py-3 align-top text-slate-700">
                     {column.render(row)}

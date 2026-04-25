@@ -1,6 +1,8 @@
 "use client";
 
+// App shell owns the persistent navigation and branding used across the demo dashboard.
 import Link from "next/link";
+import Image from "next/image";
 import type React from "react";
 import { usePathname } from "next/navigation";
 import {
@@ -38,8 +40,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-slate-50">
       <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-slate-200 bg-white xl:block">
         <div className="border-b border-slate-200 px-6 py-5">
-          <p className="text-sm font-semibold uppercase tracking-wide text-signal">CrisisWeave</p>
-          <h1 className="mt-1 text-xl font-bold text-ink">Dynamic Dispatch Grid</h1>
+          <div className="flex items-center gap-3">
+            <Image src="/logo.png" alt="CrisisWeave logo" width={48} height={48} className="rounded-md object-contain" />
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wide text-signal">CrisisWeave</p>
+              <h1 className="mt-1 text-xl font-bold text-ink">Dynamic Dispatch Grid</h1>
+            </div>
+          </div>
         </div>
         <nav className="space-y-1 px-3 py-4">
           {navItems.map((item) => {
@@ -63,9 +70,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="xl:pl-72">
         <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/95 px-4 py-3 backdrop-blur xl:hidden">
           <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-signal">CrisisWeave</p>
-              <p className="text-sm font-bold text-ink">Dispatch Grid</p>
+            <div className="flex items-center gap-2">
+              <Image src="/logo.png" alt="CrisisWeave logo" width={36} height={36} className="rounded-md object-contain" />
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-signal">CrisisWeave</p>
+                <p className="text-sm font-bold text-ink">Dispatch Grid</p>
+              </div>
             </div>
             <select
               className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"

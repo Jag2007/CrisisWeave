@@ -32,8 +32,8 @@ Each agent records:
 
 Reasoning is powered by API keys:
 
-1. Gemini API is primary.
-2. Groq API is fallback.
+1. Groq API is primary.
+2. OpenAI API is fallback.
 3. Existing deterministic logic is final resilience fallback only.
 
 ## Project Structure
@@ -60,10 +60,10 @@ MONGODB_DB_NAME=crisisweave_db
 PORT=4000
 DEDUP_RADIUS_KM=1
 DEDUP_WINDOW_MINUTES=60
-GEMINI_API_KEY=<your-gemini-api-key>
-GEMINI_MODEL=gemini-2.0-flash
 GROQ_API_KEY=<your-groq-api-key>
 GROQ_MODEL=llama-3.3-70b-versatile
+OPENAI_API_KEY=<your-openai-api-key>
+OPENAI_MODEL=gpt-4o-mini
 ```
 
 Frontend env:
@@ -153,8 +153,9 @@ List endpoints support `page`, `limit`, `status`, `severity`, `incidentType`, `r
 
 ## Notes
 
-- The prototype is designed to use Gemini/Groq API keys for agent reasoning.
+- The prototype is designed to use Groq/OpenAI API keys for agent reasoning.
 - Local deterministic logic is retained only to keep the demo stable if providers fail.
+- The dashboard uses polling for live progress and live ETA display; WebSockets are not required for this prototype.
 - No real SMS/email/phone alerts are sent.
 - Authentication is intentionally not implemented yet, per current scope.
 - MongoDB geospatial fields use GeoJSON points with `2dsphere` indexes.

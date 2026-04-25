@@ -1,27 +1,66 @@
 "use client";
 
-import { useState } from "react";
+// Upload page starts JSON bundle processing, then polls MongoDB batch metadata
+// so progress survives navigation and remains visible across the app.
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Alert, Button, Progress, message } from "antd";
 import { UploadCloud } from "lucide-react";
-import { apiPost, apiPostJson } from "../../lib/api";
+import { apiGet, apiPost, apiPostJson, type ApiListResponse } from "../../lib/api";
 
 type UploadResult = {
   ok: boolean;
   result: {
     batchId: string;
     totalRecords: number;
-    processedRecords: number;
-    failedRecords: number;
-    incidentsCreated: number;
-    duplicatesFound: number;
+    status: string;
   };
+};
+
+type UploadBatch = {
+  _id: string;
+  totalRecords: number;
+  processedRecords: number;
+  failedRecords: number;
+  status: string;
 };
 
 export default function UploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [jsonText, setJsonText] = useState("");
   const [result, setResult] = useState<UploadResult | null>(null);
+  const [batch, setBatch] = useState<UploadBatch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const activeBatchId = result?.result.batchId;
+  const progressPercent = useMemo(() => {
+    if (!batch?.totalRecords) return 0;
+    return Math.round(((batch.processedRecords + batch.failedRecords) / batch.totalRecords) * 100);
+  }, [batch]);
+
+  useEffect(() => {
+    if (!activeBatchId) return undefined;
+    let active = true;
+
+    const loadBatch = () => {
+      apiGet<ApiListResponse<UploadBatch>>("/upload-batches?limit=25")
+        .then((response) => {
+          if (!active) return;
+          const current = response.items.find((item) => item._id === activeBatchId);
+          if (current) {
+            setBatch(current);
+          }
+        })
+        .catch(() => undefined);
+    };
+
+    loadBatch();
+    const timer = window.setInterval(loadBatch, 3000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [activeBatchId]);
 
   const submit = async () => {
     setLoading(true);
@@ -38,6 +77,14 @@ export default function UploadPage() {
         response = await apiPostJson<UploadResult>("/uploads/json", JSON.parse(jsonText));
       }
       setResult(response);
+      setBatch({
+        _id: response.result.batchId,
+        totalRecords: response.result.totalRecords,
+        processedRecords: 0,
+        failedRecords: 0,
+        status: response.result.status
+      });
+      message.success("Upload accepted. Agent graph is processing in the background.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -70,24 +117,33 @@ export default function UploadPage() {
           />
         </div>
       </section>
-      <button
+      <Button
+        type="primary"
         onClick={submit}
+        loading={loading}
         disabled={loading || (!file && !jsonText.trim())}
-        className="rounded-md bg-signal px-5 py-2.5 text-sm font-semibold text-white hover:bg-teal-800 disabled:cursor-not-allowed disabled:bg-slate-300"
       >
-        {loading ? "Processing..." : "Upload and Run Pipeline"}
-      </button>
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
+        Upload and Start Agent Graph
+      </Button>
+      {error ? <Alert type="error" message="Upload failed" description={error} showIcon /> : null}
       {result ? (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900">
-          <p className="font-bold">Pipeline completed for batch {result.result.batchId}</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-5">
-            <span>Total: {result.result.totalRecords}</span>
-            <span>Processed: {result.result.processedRecords}</span>
-            <span>Failed: {result.result.failedRecords}</span>
-            <span>Created: {result.result.incidentsCreated}</span>
-            <span>Duplicates: {result.result.duplicatesFound}</span>
+          <p className="font-bold">Agent graph started for batch {result.result.batchId}</p>
+          <p className="mt-1 text-xs text-emerald-800">
+            Processing continues on the backend. You can open Overview, Incidents, Agent Traces, or Upload Batches and watch records appear live.
+          </p>
+          <div className="mt-4">
+            <Progress percent={progressPercent} status={batch?.status === "FAILED" ? "exception" : batch?.status === "COMPLETED" ? "success" : "active"} />
           </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-4">
+            <span>Total: {batch?.totalRecords ?? result.result.totalRecords}</span>
+            <span>Processed: {batch?.processedRecords ?? 0}</span>
+            <span>Failed: {batch?.failedRecords ?? 0}</span>
+            <span>Status: {batch?.status ?? result.result.status}</span>
+          </div>
+          <Link href="/agent-traces" className="mt-4 inline-block font-semibold text-emerald-950 underline">
+            View live agent reasoning
+          </Link>
         </div>
       ) : null}
     </div>

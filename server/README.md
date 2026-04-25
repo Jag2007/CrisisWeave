@@ -22,8 +22,8 @@ The Critic Agent can send the graph back to resource/routing/dispatch once with 
 
 Reasoning provider order:
 
-1. Gemini API through `GEMINI_API_KEY`.
-2. Groq API through `GROQ_API_KEY`.
+1. Groq API through `GROQ_API_KEY`.
+2. OpenAI API through `OPENAI_API_KEY`.
 3. Existing deterministic fallback functions if both providers fail.
 
 ## Tech Stack
@@ -33,8 +33,8 @@ Reasoning provider order:
 - TypeScript
 - MongoDB Atlas
 - Mongoose
-- Gemini API
 - Groq API
+- OpenAI API
 
 ## Environment Variables
 
@@ -46,10 +46,10 @@ MONGODB_DB_NAME=crisisweave_db
 PORT=4000
 DEDUP_RADIUS_KM=1
 DEDUP_WINDOW_MINUTES=60
-GEMINI_API_KEY=<your-gemini-api-key>
-GEMINI_MODEL=gemini-2.0-flash
 GROQ_API_KEY=<your-groq-api-key>
 GROQ_MODEL=llama-3.3-70b-versatile
+OPENAI_API_KEY=<your-openai-api-key>
+OPENAI_MODEL=gpt-4o-mini
 SEED_ADMIN_EMAIL=admin@crisisweave.local
 SEED_ADMIN_PASSWORD=change-me-admin-password
 SEED_STAFF_EMAIL=staff@crisisweave.local

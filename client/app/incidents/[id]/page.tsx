@@ -1,10 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+// Incident detail page ties raw calls, agent reasoning, resources, dispatches,
+// and alerts together while polling for live ETA/progress changes.
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { Alert, Skeleton } from "antd";
 import { apiGet } from "../../../lib/api";
 import { Badge } from "../../../components/Badge";
 import { DataTable } from "../../../components/DataTable";
+import { friendlyTraceText } from "../../../lib/traceText";
+import { liveEtaText } from "../../../lib/liveEta";
 
 type Detail = {
   incident: any;
@@ -19,15 +24,51 @@ export default function IncidentDetailPage() {
   const params = useParams<{ id: string }>();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const lastDetailSnapshot = useRef("");
 
   useEffect(() => {
-    apiGet<{ ok: boolean; data: Detail }>(`/incidents/${params.id}`)
-      .then((response) => setDetail(response.data))
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load incident"));
+    let active = true;
+
+    const load = (initial = false) => {
+      apiGet<{ ok: boolean; data: Detail }>(`/incidents/${params.id}`)
+        .then((response) => {
+          if (!active) return;
+          const nextSnapshot = JSON.stringify(response.data);
+          if (nextSnapshot !== lastDetailSnapshot.current) {
+            lastDetailSnapshot.current = nextSnapshot;
+            setDetail(response.data);
+          }
+          setError(null);
+        })
+        .catch((err) => {
+          if (!active) return;
+          if (initial || !lastDetailSnapshot.current) {
+            setError(err instanceof Error ? err.message : "Failed to load incident");
+          }
+        });
+    };
+
+    load(true);
+    const timer = window.setInterval(() => load(false), 3000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
   }, [params.id]);
 
-  if (error) return <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>;
-  if (!detail) return <div className="rounded-lg bg-white p-6 shadow-soft">Loading...</div>;
+  if (error) return <Alert type="error" message="Incident failed to load" description={error} showIcon />;
+  if (!detail) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
+          <Skeleton active paragraph={{ rows: 4 }} title={{ width: "45%" }} />
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          <Skeleton active paragraph={{ rows: 8 }} title={{ width: "30%" }} />
+        </div>
+      </div>
+    );
+  }
 
   const incident = detail.incident;
 
@@ -61,9 +102,9 @@ export default function IncidentDetailPage() {
           columns={[
             { key: "step", label: "Step", render: (row: any) => `${row.stepIndex}${row.retryAttempt ? ` / retry ${row.retryAttempt}` : ""}` },
             { key: "agent", label: "Agent", render: (row: any) => <Badge value={row.agentName} /> },
-            { key: "decision", label: "Decision", render: (row: any) => row.decision },
-            { key: "reasoning", label: "Reasoning", render: (row: any) => row.reasoning },
-            { key: "critique", label: "Critique", render: (row: any) => row.critique || "-" }
+            { key: "decision", label: "Decision", render: (row: any) => friendlyTraceText(row.decision) },
+            { key: "reasoning", label: "Reasoning", render: (row: any) => friendlyTraceText(row.reasoning) },
+            { key: "critique", label: "Critique", render: (row: any) => friendlyTraceText(row.critique) }
           ]}
         />
       </section>
@@ -87,7 +128,7 @@ export default function IncidentDetailPage() {
           columns={[
             { key: "code", label: "Code", render: (row: any) => row.dispatchCode },
             { key: "type", label: "Type", render: (row: any) => <Badge value={row.resourceType} /> },
-            { key: "eta", label: "ETA", render: (row: any) => `${row.estimatedArrivalMinutes} min` },
+            { key: "eta", label: "Live ETA", render: (row: any) => liveEtaText(row.dispatchedAt, row.estimatedArrivalMinutes) },
             { key: "reason", label: "Decision Reason", render: (row: any) => row.decisionReason }
           ]}
         />

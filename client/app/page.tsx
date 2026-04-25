@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+// Dashboard overview shows live MongoDB/agent graph status and gives admins
+// reliable seed/reset controls for the Hyderabad demo.
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { Alert, Button, Skeleton, message } from "antd";
 import { Database, FileJson, RefreshCcw, ShieldCheck } from "lucide-react";
 import { apiGet, apiPostJson } from "../lib/api";
 import { formatDate } from "../lib/format";
@@ -27,20 +30,39 @@ export default function DashboardPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const lastSummarySnapshot = useRef("");
 
-  const load = () => {
+  const load = (initial = false) => {
     apiGet<{ ok: boolean; data: Summary }>("/dashboard/summary")
-      .then((response) => setSummary(response.data))
-      .catch((err) => setError(err instanceof Error ? err.message : "Unable to load dashboard"));
+      .then((response) => {
+        const nextSnapshot = JSON.stringify(response.data);
+        if (nextSnapshot !== lastSummarySnapshot.current) {
+          lastSummarySnapshot.current = nextSnapshot;
+          setSummary(response.data);
+        }
+        setError(null);
+      })
+      .catch((err) => {
+        if (initial || !lastSummarySnapshot.current) {
+          setError(err instanceof Error ? err.message : "Unable to load dashboard");
+        }
+      });
   };
 
-  useEffect(load, []);
+  useEffect(() => {
+    load(true);
+    const timer = window.setInterval(() => load(false), 3000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const runSeed = async () => {
     setBusy(true);
     try {
-      await apiPostJson("/admin/seed");
+      await apiPostJson("/admin/seed", {});
+      message.success("Hyderabad demo users and resources seeded.");
       load();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "Seed failed. Check that the backend and MongoDB are running.");
     } finally {
       setBusy(false);
     }
@@ -49,15 +71,18 @@ export default function DashboardPage() {
   const resetDemo = async () => {
     setBusy(true);
     try {
-      await apiPostJson("/admin/reset-demo-data");
+      await apiPostJson("/admin/reset-demo-data", {});
+      message.success("Demo data reset and seed data recreated.");
       load();
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : "Reset failed. Check that the backend and MongoDB are running.");
     } finally {
       setBusy(false);
     }
   };
 
   if (error) {
-    return <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">{error}</div>;
+    return <Alert type="error" message="Dashboard failed to load" description={error} showIcon />;
   }
 
   return (
@@ -72,12 +97,8 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button onClick={runSeed} disabled={busy} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-700">
-              <Database className="h-4 w-4" /> Seed
-            </button>
-            <button onClick={resetDemo} disabled={busy} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
-              <RefreshCcw className="h-4 w-4" /> Reset Demo
-            </button>
+            <Button type="primary" loading={busy} onClick={runSeed} icon={<Database className="h-4 w-4" />}>Seed</Button>
+            <Button loading={busy} onClick={resetDemo} icon={<RefreshCcw className="h-4 w-4" />}>Reset Demo</Button>
             <Link href="/upload" className="inline-flex items-center gap-2 rounded-md bg-signal px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
               <FileJson className="h-4 w-4" /> Upload JSON
             </Link>
@@ -85,7 +106,9 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {!summary ? <DashboardSkeleton /> : null}
+
+      {summary ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Uploaded Batches" value={summary?.totalUploadedBatches ?? "-"} />
         <MetricCard label="Incoming Calls" value={summary?.totalIncomingCalls ?? "-"} />
         <MetricCard label="Active Incidents" value={summary?.totalActiveIncidents ?? "-"} />
@@ -95,9 +118,9 @@ export default function DashboardPage() {
         <MetricCard label="Dispatches" value={summary?.totalDispatches ?? "-"} />
         <MetricCard label="Alerts" value={summary?.totalAlerts ?? "-"} />
         <MetricCard label="Agent Decisions" value={summary?.totalAgentTraces ?? "-"} detail="Reasoning steps stored" />
-      </div>
+      </div> : null}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {summary ? <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
           <h3 className="flex items-center gap-2 text-lg font-bold text-ink"><ShieldCheck className="h-5 w-5 text-signal" /> Incidents by severity</h3>
           <div className="mt-4 space-y-2">
@@ -120,9 +143,9 @@ export default function DashboardPage() {
             ))}
           </div>
         </section>
-      </div>
+      </div> : null}
 
-      <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+      {summary ? <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
         <h3 className="text-lg font-bold text-ink">Recent system logs</h3>
         <div className="mt-4 space-y-3">
           {(summary?.recentSystemLogs || []).map((log) => (
@@ -135,7 +158,29 @@ export default function DashboardPage() {
             </div>
           ))}
         </div>
-      </section>
+      </section> : null}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
+            <Skeleton active paragraph={{ rows: 1, width: "45%" }} title={{ width: "70%" }} />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          <Skeleton active paragraph={{ rows: 5 }} title={{ width: "35%" }} />
+        </div>
+        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
+          <Skeleton active paragraph={{ rows: 5 }} title={{ width: "35%" }} />
+        </div>
+      </div>
     </div>
   );
 }

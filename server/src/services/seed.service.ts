@@ -1,5 +1,7 @@
+// Seed service creates the Hyderabad demo operators and response units used by dashboard/admin buttons.
 import bcrypt from "bcryptjs";
 import { Resource, User } from "../models";
+import { toGeoPoint } from "../utils/geo";
 
 const demoResources = [
   {
@@ -271,13 +273,20 @@ export async function seedDatabase(): Promise<void> {
   const staffPassword = process.env.SEED_STAFF_PASSWORD || "change-me-staff-password";
 
   await Promise.all(
-    demoResources.map((resource) =>
-      Resource.updateOne(
+    demoResources.map((resource) => {
+      const resourceWithLocations = {
+        ...resource,
+        currentLocation: toGeoPoint(resource.currentLatitude, resource.currentLongitude),
+        baseLocation: toGeoPoint(resource.baseLatitude, resource.baseLongitude),
+        lastStatusUpdatedAt: new Date()
+      };
+
+      return Resource.updateOne(
         { resourceCode: resource.resourceCode },
-        { $set: { ...resource, lastStatusUpdatedAt: new Date() } },
+        { $set: resourceWithLocations },
         { upsert: true }
-      )
-    )
+      );
+    })
   );
 
   const [adminHash, staffHash] = await Promise.all([

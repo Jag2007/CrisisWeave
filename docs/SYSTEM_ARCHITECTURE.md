@@ -4,9 +4,9 @@
 
 ```mermaid
 flowchart LR
-  Judge["Judge / User"] --> Client["Next.js + Tailwind Dashboard"]
+  Judge["Judge / User"] --> Client["Next.js + Tailwind + Ant Design Dashboard"]
   Client --> UploadAPI["POST /api/uploads/json"]
-  Client --> ReadAPIs["Dashboard + Admin Data APIs"]
+  Client -- "poll every 3s for live progress" --> ReadAPIs["Dashboard + Admin Data APIs"]
 
   UploadAPI --> Batch["upload_batches"]
   UploadAPI --> Calls["incoming_calls"]
@@ -25,10 +25,10 @@ flowchart LR
   end
 
   subgraph Reasoning["LLM Reasoning Provider Chain"]
-    Gemini["Gemini API Primary"]
-    Groq["Groq API Fallback"]
+    Groq["Groq API Primary"]
+    OpenAI["OpenAI API Fallback"]
     Local["Local Deterministic Safety Fallback"]
-    Gemini --> Groq --> Local
+    Groq --> OpenAI --> Local
   end
 
   Graph --> Reasoning
@@ -56,8 +56,8 @@ sequenceDiagram
   participant U as User
   participant API as Upload API
   participant G as Agent Graph
-  participant Gemini as Gemini API
   participant Groq as Groq API
+  participant OpenAI as OpenAI API
   participant Fallback as Local Fallback
   participant DB as MongoDB Atlas
 
@@ -66,11 +66,11 @@ sequenceDiagram
   loop Each transcript
     API->>DB: Store incoming call
     API->>G: executeGraph(call)
-    G->>Gemini: Ask agent for structured reasoning
-    alt Gemini unavailable/fails
-      G->>Groq: Ask same agent for structured reasoning
-    end
+    G->>Groq: Ask agent for structured reasoning
     alt Groq unavailable/fails
+      G->>OpenAI: Ask same agent for structured reasoning
+    end
+    alt OpenAI unavailable/fails
       G->>Fallback: Run deterministic safety logic
     end
     G->>DB: Save agent trace
@@ -103,8 +103,12 @@ flowchart TD
 
 Every agent follows the same provider strategy:
 
-1. Gemini API using `GEMINI_API_KEY`.
-2. Groq API using `GROQ_API_KEY`.
+1. Groq API using `GROQ_API_KEY`.
+2. OpenAI API using `OPENAI_API_KEY`.
 3. Local deterministic fallback logic only if providers fail.
 
 The project is intended to demonstrate API-key powered agentic reasoning while staying robust during demos.
+
+## Live Dashboard Updates
+
+The prototype uses lightweight polling instead of WebSockets. Upload requests return quickly with a batch ID, the backend continues the agent graph in the background, and dashboard/list/detail pages poll every 3 seconds. Dispatch ETA labels are recalculated from `dispatchedAt` and `estimatedArrivalMinutes`, so judges see the remaining time update without needing a page refresh.

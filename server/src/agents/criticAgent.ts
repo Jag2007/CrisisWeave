@@ -1,3 +1,5 @@
+// Critic Agent reviews the full graph decision and explains refinements in
+// plain language so judges can understand why the system accepted or retried.
 import type { ResourceType, Severity } from "../utils/enums";
 import { reasonWithLlmOrFallback } from "../services/llm.service";
 import { BaseAgent, type AgentContext, type AgentResult } from "./baseAgent";
@@ -59,14 +61,22 @@ export class CriticAgent extends BaseAgent<CriticInput, CriticOutput> {
 
     const safeOutput = sanitizeCritic(llm.data, deterministic, input.retryAttempt);
 
+    const acceptedWithLimitations = safeOutput.isDecisionOptimal && safeOutput.improvementSuggestions.length > 0;
+    const reasoning =
+      llm.data.reasoning ||
+      (acceptedWithLimitations
+        ? `The graph retried once. Some resource types are still unavailable, so CrisisWeave keeps the best available dispatch and marks the remaining coverage gap clearly.`
+        : safeOutput.improvementSuggestions.length
+          ? `Found ${safeOutput.improvementSuggestions.length} issue(s): ${safeOutput.improvementSuggestions.join(" ")}`
+          : "All required resource types are covered and ETAs are acceptable.");
+    const decision = acceptedWithLimitations
+      ? "Accept with limitations after retry; keep searching for missing resource coverage."
+      : llm.data.decision || (safeOutput.isDecisionOptimal ? "Accept dispatch decision." : "Refine resource ranking and dispatch once more.");
+
     return {
       output: safeOutput,
-      reasoning:
-        llm.data.reasoning ||
-        (safeOutput.improvementSuggestions.length
-          ? `Provider ${llm.provider}: found ${safeOutput.improvementSuggestions.length} concern(s): ${safeOutput.improvementSuggestions.join(" ")}`
-          : `Provider ${llm.provider}: all required resource types are covered and ETAs are acceptable.`),
-      decision: llm.data.decision || (safeOutput.isDecisionOptimal ? "Accept dispatch decision." : "Refine resource ranking and dispatch once more."),
+      reasoning,
+      decision,
       critique:
         safeOutput.improvementSuggestions.join(" ") ||
         (llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`)

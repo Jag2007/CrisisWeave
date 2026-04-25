@@ -1,3 +1,6 @@
+// Upload pipeline entrypoint. It stores batches immediately, then runs the
+// agent graph in the background so frontend navigation does not cancel progress.
+import type { Types } from "mongoose";
 import { IncomingCall, UploadBatch } from "../models";
 import { executeGraph } from "../graph/agentGraph";
 import type { EmergencyTranscriptInput, NormalizedTranscriptRecord } from "../types/upload";
@@ -76,6 +79,68 @@ export async function processUploadedJson(input: {
     metadata: { originalFileName: input.originalFileName, executionMode: "agent_graph" }
   });
 
+  const result = await processBatchRecords(batch._id, records);
+
+  return {
+    batchId: batch._id.toString(),
+    totalRecords: records.length,
+    ...result
+  };
+}
+
+export async function startUploadedJsonProcessing(input: {
+  payload: unknown;
+  originalFileName: string;
+  uploadedBy?: string;
+  uploadSource?: string;
+}): Promise<{
+  batchId: string;
+  totalRecords: number;
+  status: "PROCESSING";
+}> {
+  const records = normalizeRecords(input.payload);
+
+  if (records.length === 0) {
+    throw new Error("No transcript records found. Upload an array, { records: [...] }, or { transcripts: [...] }.");
+  }
+
+  const batch = await UploadBatch.create({
+    originalFileName: input.originalFileName,
+    uploadedBy: input.uploadedBy,
+    totalRecords: records.length,
+    processedRecords: 0,
+    failedRecords: 0,
+    status: "PROCESSING",
+    uploadSource: input.uploadSource || "json_upload"
+  });
+
+  await writeSystemLog({
+    eventType: "BATCH_UPLOADED",
+    message: `${records.length} transcript records uploaded from ${input.originalFileName}. Agent graph is processing in the background.`,
+    batchId: batch._id,
+    metadata: { originalFileName: input.originalFileName, executionMode: "agent_graph_background" }
+  });
+
+  setImmediate(() => {
+    void processBatchRecords(batch._id, records);
+  });
+
+  return {
+    batchId: batch._id.toString(),
+    totalRecords: records.length,
+    status: "PROCESSING"
+  };
+}
+
+async function processBatchRecords(
+  batchId: Types.ObjectId,
+  records: NormalizedTranscriptRecord[]
+): Promise<{
+  processedRecords: number;
+  failedRecords: number;
+  incidentsCreated: number;
+  duplicatesFound: number;
+}> {
   let processedRecords = 0;
   let failedRecords = 0;
   let incidentsCreated = 0;
@@ -86,7 +151,7 @@ export async function processUploadedJson(input: {
 
     try {
       const incomingCall = await IncomingCall.create({
-        batchId: batch._id,
+        batchId,
         ...record,
         processingStatus: "PENDING",
         isDuplicate: false
@@ -96,13 +161,13 @@ export async function processUploadedJson(input: {
       await writeSystemLog({
         eventType: "CALL_STORED",
         message: "Raw transcript stored as incoming call before agent graph execution.",
-        batchId: batch._id,
+        batchId,
         incomingCallId: incomingCall._id,
         metadata: { sourceId: record.sourceId }
       });
 
       const graphResult = await executeGraph({
-        batchId: batch._id,
+        batchId,
         incomingCallId: incomingCall._id,
         record
       });
@@ -116,6 +181,7 @@ export async function processUploadedJson(input: {
       }
 
       processedRecords += 1;
+      await UploadBatch.updateOne({ _id: batchId }, { $set: { processedRecords, failedRecords } });
     } catch (error) {
       failedRecords += 1;
       const message = error instanceof Error ? error.message : "Unknown pipeline error";
@@ -127,16 +193,19 @@ export async function processUploadedJson(input: {
         );
       }
 
+      await UploadBatch.updateOne({ _id: batchId }, { $set: { processedRecords, failedRecords } });
       await writeSystemLog({
         eventType: "PIPELINE_FAILED",
         message,
-        batchId: batch._id,
+        batchId,
         incomingCallId
       });
     }
   }
 
-  await batch.updateOne({
+  await UploadBatch.updateOne({
+    _id: batchId
+  }, {
     $set: {
       processedRecords,
       failedRecords,
@@ -146,17 +215,10 @@ export async function processUploadedJson(input: {
 
   await writeSystemLog({
     eventType: failedRecords > 0 ? "PIPELINE_FAILED" : "PIPELINE_COMPLETED",
-    message: `Agent graph batch ${batch._id.toString()} completed with ${processedRecords} processed and ${failedRecords} failed.`,
-    batchId: batch._id,
-    metadata: { incidentsCreated, duplicatesFound, executionMode: "agent_graph" }
+    message: `Agent graph batch ${String(batchId)} completed with ${processedRecords} processed and ${failedRecords} failed.`,
+    batchId,
+    metadata: { incidentsCreated, duplicatesFound, executionMode: "agent_graph_background" }
   });
 
-  return {
-    batchId: batch._id.toString(),
-    totalRecords: records.length,
-    processedRecords,
-    failedRecords,
-    incidentsCreated,
-    duplicatesFound
-  };
+  return { processedRecords, failedRecords, incidentsCreated, duplicatesFound };
 }

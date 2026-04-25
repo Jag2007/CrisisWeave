@@ -1,6 +1,8 @@
+// Central LLM provider chain for every CrisisWeave agent. Groq is tried first,
+// OpenAI is the backup provider, and deterministic local logic is the final safe fallback.
 import type { AgentName } from "../utils/enums";
 
-export type LlmProvider = "gemini" | "groq" | "structured_fallback";
+export type LlmProvider = "groq" | "openai" | "structured_fallback";
 
 export interface LlmResult<T> {
   provider: LlmProvider;
@@ -17,8 +19,8 @@ interface LlmRequest<T> {
   fallback: () => T | Promise<T>;
 }
 
-const geminiModel = process.env.GEMINI_MODEL || "gemini-2.0-flash";
 const groqModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const openAiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 function buildPrompt(request: Omit<LlmRequest<unknown>, "fallback">): string {
   return [
@@ -42,43 +44,6 @@ function parseJsonObject<T>(text: string): T {
     }
     return JSON.parse(match[0]) as T;
   }
-}
-
-async function callGemini<T>(prompt: string): Promise<{ data: T; rawText: string }> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured.");
-  }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          responseMimeType: "application/json",
-          temperature: 0.2,
-          maxOutputTokens: 2048
-        }
-      })
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(`Gemini request failed with ${response.status}: ${await response.text()}`);
-  }
-
-  const body = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const rawText = body.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("") || "";
-  if (!rawText) {
-    throw new Error("Gemini returned an empty response.");
-  }
-
-  return { data: parseJsonObject<T>(rawText), rawText };
 }
 
 async function callGroq<T>(prompt: string): Promise<{ data: T; rawText: string }> {
@@ -121,22 +86,83 @@ async function callGroq<T>(prompt: string): Promise<{ data: T; rawText: string }
   return { data: parseJsonObject<T>(rawText), rawText };
 }
 
+async function callOpenAI<T>(prompt: string): Promise<{ data: T; rawText: string }> {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not configured.");
+  }
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: openAiModel,
+      temperature: 0.2,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content: "You are an emergency dispatch reasoning agent. Return only strict JSON."
+        },
+        { role: "user", content: prompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenAI request failed with ${response.status}: ${await response.text()}`);
+  }
+
+  const body = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  const rawText = body.choices?.[0]?.message?.content || "";
+  if (!rawText) {
+    throw new Error("OpenAI returned an empty response.");
+  }
+
+  return { data: parseJsonObject<T>(rawText), rawText };
+}
+
+function summarizeProviderError(provider: "Groq" | "OpenAI", error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const lower = message.toLowerCase();
+
+  if (lower.includes("not configured")) {
+    return `${provider} is not configured.`;
+  }
+  if (lower.includes("429") || lower.includes("rate limit")) {
+    return `${provider} is temporarily rate-limited.`;
+  }
+  if (lower.includes("401") || lower.includes("403") || lower.includes("invalid") || lower.includes("unauthorized")) {
+    return `${provider} rejected the configured API key.`;
+  }
+  if (lower.includes("json")) {
+    return `${provider} returned a response the agent could not safely parse.`;
+  }
+
+  return `${provider} was unavailable for this agent step.`;
+}
+
 export async function reasonWithLlmOrFallback<T>(request: LlmRequest<T>): Promise<LlmResult<T>> {
   const prompt = buildPrompt(request);
   const errors: string[] = [];
 
   try {
-    const gemini = await callGemini<T>(prompt);
-    return { provider: "gemini", data: gemini.data, rawText: gemini.rawText };
-  } catch (error) {
-    errors.push(`Gemini: ${error instanceof Error ? error.message : "unknown error"}`);
-  }
-
-  try {
     const groq = await callGroq<T>(prompt);
     return { provider: "groq", data: groq.data, rawText: groq.rawText };
   } catch (error) {
-    errors.push(`Groq: ${error instanceof Error ? error.message : "unknown error"}`);
+    errors.push(summarizeProviderError("Groq", error));
+  }
+
+  try {
+    const openAi = await callOpenAI<T>(prompt);
+    return { provider: "openai", data: openAi.data, rawText: openAi.rawText };
+  } catch (error) {
+    errors.push(summarizeProviderError("OpenAI", error));
   }
 
   return {

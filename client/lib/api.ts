@@ -1,3 +1,5 @@
+// Small API client used by the dashboard. All requests are no-store so live
+// polling always reflects the current backend/MongoDB state.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:4000/api";
 
 export type ApiListResponse<T> = {
@@ -14,7 +16,8 @@ export type ApiListResponse<T> = {
 export async function apiGet<T>(path: string): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, { cache: "no-store" });
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+    const text = await response.text();
+    throw new Error(extractApiMessage(text) || `API request failed: ${response.status}`);
   }
   return response.json();
 }
@@ -26,7 +29,7 @@ export async function apiPost<T>(path: string, body?: BodyInit): Promise<T> {
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `API request failed: ${response.status}`);
+    throw new Error(extractApiMessage(text) || `API request failed: ${response.status}`);
   }
   return response.json();
 }
@@ -39,7 +42,16 @@ export async function apiPostJson<T>(path: string, payload?: unknown): Promise<T
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `API request failed: ${response.status}`);
+    throw new Error(extractApiMessage(text) || `API request failed: ${response.status}`);
   }
   return response.json();
+}
+
+function extractApiMessage(text: string): string {
+  try {
+    const parsed = JSON.parse(text) as { message?: string };
+    return parsed.message || text;
+  } catch {
+    return text;
+  }
 }
