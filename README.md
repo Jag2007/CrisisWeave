@@ -1,10 +1,12 @@
 # CrisisWeave - Smart City Dynamic Dispatch Grid
 
-CrisisWeave is a hackathon prototype that turns uploaded emergency transcript JSON bundles into deduplicated incidents, priority scores, resource dispatches, simulated alerts, and dashboard-visible system logs.
+CrisisWeave is an AI hackathon prototype that turns uploaded emergency transcript JSON bundles into deduplicated incidents, priority scores, dispatch decisions, simulated alerts, and explainable agent traces.
 
-This is not a real phone-call or alerting system. Inputs are uploaded JSON files, and alerts are database records for demo visibility.
+This is not a real phone-call or alert-delivery system. Emergency inputs are uploaded JSON records, and alerts are simulated database records for dashboard visibility.
 
-The backend now runs as an agentic execution graph:
+## What Makes It Agentic
+
+The backend is built around an agentic execution graph:
 
 ```text
 Goal
@@ -20,19 +22,57 @@ Goal
 → Persist trace memory
 ```
 
+Each agent records:
+
+- what it received
+- what it decided
+- why it decided it
+- which reasoning provider was used
+- optional critique and refinement suggestions
+
+Reasoning is powered by API keys:
+
+1. Gemini API is primary.
+2. Groq API is fallback.
+3. Existing deterministic logic is final resilience fallback only.
+
 ## Project Structure
 
 ```text
 server/   Node.js + Express + TypeScript + MongoDB/Mongoose API
 client/   Next.js + Tailwind dashboard
-data/     Sample JSON emergency transcript bundles
-docs/     Architecture diagram and project report
+data/     Hyderabad sample JSON emergency transcript bundle
+docs/     Architecture diagram and full project report
 ```
 
 Detailed docs:
 
 - [System architecture](docs/SYSTEM_ARCHITECTURE.md)
 - [Project report](docs/PROJECT_REPORT.md)
+
+## Environment Setup
+
+Backend env:
+
+```bash
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority
+MONGODB_DB_NAME=crisisweave_db
+PORT=4000
+DEDUP_RADIUS_KM=1
+DEDUP_WINDOW_MINUTES=60
+GEMINI_API_KEY=<your-gemini-api-key>
+GEMINI_MODEL=gemini-2.0-flash
+GROQ_API_KEY=<your-groq-api-key>
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+Frontend env:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api
+```
+
+Do not commit real API keys, passwords, or production connection strings.
 
 ## Run Backend
 
@@ -43,20 +83,6 @@ npm run seed
 npm run dev
 ```
 
-Backend env:
-
-```bash
-MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority
-MONGODB_DB_NAME=crisisweave_db
-PORT=4000
-DEDUP_RADIUS_KM=1
-DEDUP_WINDOW_MINUTES=60
-GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.0-flash
-GROQ_API_KEY=
-GROQ_MODEL=llama-3.3-70b-versatile
-```
-
 ## Run Frontend
 
 ```bash
@@ -65,21 +91,17 @@ npm install
 npm run dev
 ```
 
-Frontend env:
-
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api
-```
-
 Open `http://localhost:3000`.
 
 ## Demo Flow For Judges
 
-1. Start the backend and frontend.
-2. Open the dashboard and click `Seed`.
+1. Start backend and frontend.
+2. Seed Hyderabad resources from the dashboard or `POST /api/admin/seed`.
 3. Go to Upload JSON.
 4. Upload `data/samples/hyderabad-emergency-bundle.json`.
-5. Review incidents, dispatches, alerts, and system logs.
+5. Open Dashboard Overview to see totals, incidents, resources, dispatches, alerts, and trace counts.
+6. Open Agent Traces to show step-by-step AI reasoning.
+7. Open an Incident Detail page to show linked transcripts, dispatch decisions, alerts, and agent trace memory.
 
 The sample includes fire duplicate reports, medical emergency, accident, flood, building collapse, home intrusion, missing pet, power failure, and gas leak.
 
@@ -89,14 +111,13 @@ The sample includes fire duplicate reports, medical emergency, accident, flood, 
 JSON upload
 → upload_batches
 → incoming_calls
-→ rule-based triage
-→ deduplication
-→ incidents
-→ priority scoring
-→ resource matching
+→ agentic execution graph
+→ LLM-first triage/dedup/priority/resource/routing/dispatch/critic
+→ incident create/update
 → dispatches
 → simulated alerts
 → system_logs
+→ agent_traces
 → dashboard APIs
 ```
 
@@ -116,7 +137,7 @@ JSON upload
 - `POST /api/admin/seed`
 - `POST /api/admin/reset-demo-data`
 
-List endpoints support `page`, `limit`, `status`, `severity`, `incidentType`, `resourceType`, and `batchId`.
+List endpoints support `page`, `limit`, `status`, `severity`, `incidentType`, `resourceType`, `batchId`, `incidentId`, `incomingCallId`, `graphRunId`, and `agentName`.
 
 ## Collections
 
@@ -126,14 +147,14 @@ List endpoints support `page`, `limit`, `status`, `severity`, `incidentType`, `r
 - `resources`: available/busy Hyderabad response units
 - `dispatches`: dispatch decisions and ETA outputs
 - `alerts`: simulated alert records
-- `agent_traces`: every agent input, output, reasoning, decision, and critique
+- `agent_traces`: every agent input, output, reasoning, decision, provider, critique, and retry attempt
 - `system_logs`: explainable pipeline audit trail
 - `users`: basic admin/staff seed users for future auth
 
 ## Notes
 
-- The prototype works without AI API keys.
-- Agent reasoning is Gemini-first, Groq-second, and structured local fallback if both providers are unavailable or fail.
+- The prototype is designed to use Gemini/Groq API keys for agent reasoning.
+- Local deterministic logic is retained only to keep the demo stable if providers fail.
 - No real SMS/email/phone alerts are sent.
 - Authentication is intentionally not implemented yet, per current scope.
 - MongoDB geospatial fields use GeoJSON points with `2dsphere` indexes.

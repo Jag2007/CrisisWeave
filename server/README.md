@@ -2,9 +2,29 @@
 
 Node.js/Express/MongoDB API for **CrisisWeave - Smart City Dynamic Dispatch Grid**.
 
-This backend accepts uploaded JSON transcript bundles, stores raw calls, runs deterministic triage, deduplicates nearby active incidents, scores priority, assigns Hyderabad resources, creates dispatches, generates simulated alert records, and logs every pipeline step.
+The server accepts uploaded JSON emergency transcript bundles, stores raw calls, executes an LLM-first multi-agent graph, creates or updates incidents, assigns Hyderabad response resources, creates dispatches, generates simulated alert records, and logs every important step.
 
-The pipeline is now agentic: each call runs through Triage, Dedup, Priority, Resource, Routing, Dispatch, and Critic agents. Agent memory is persisted in `agent_traces`.
+## Agentic Backend
+
+Each uploaded transcript runs through:
+
+```text
+Triage Agent
+→ Dedup Agent
+→ Priority Agent
+→ Resource Agent
+→ Routing Agent
+→ Dispatch Agent
+→ Critic Agent
+```
+
+The Critic Agent can send the graph back to resource/routing/dispatch once with refinement hints. Every agent writes memory into `agent_traces`.
+
+Reasoning provider order:
+
+1. Gemini API through `GEMINI_API_KEY`.
+2. Groq API through `GROQ_API_KEY`.
+3. Existing deterministic fallback functions if both providers fail.
 
 ## Tech Stack
 
@@ -13,10 +33,12 @@ The pipeline is now agentic: each call runs through Triage, Dedup, Priority, Res
 - TypeScript
 - MongoDB Atlas
 - Mongoose
+- Gemini API
+- Groq API
 
 ## Environment Variables
 
-Copy `server/.env.example` to `server/.env` and fill in your Atlas credentials.
+Copy `server/.env.example` to `server/.env` and fill in real credentials.
 
 ```bash
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority
@@ -24,9 +46,9 @@ MONGODB_DB_NAME=crisisweave_db
 PORT=4000
 DEDUP_RADIUS_KM=1
 DEDUP_WINDOW_MINUTES=60
-GEMINI_API_KEY=
+GEMINI_API_KEY=<your-gemini-api-key>
 GEMINI_MODEL=gemini-2.0-flash
-GROQ_API_KEY=
+GROQ_API_KEY=<your-groq-api-key>
 GROQ_MODEL=llama-3.3-70b-versatile
 SEED_ADMIN_EMAIL=admin@crisisweave.local
 SEED_ADMIN_PASSWORD=change-me-admin-password
@@ -34,7 +56,7 @@ SEED_STAFF_EMAIL=staff@crisisweave.local
 SEED_STAFF_PASSWORD=change-me-staff-password
 ```
 
-Do not commit real passwords or production connection strings.
+Do not commit real API keys, passwords, or production connection strings.
 
 ## MongoDB Atlas Setup
 
@@ -43,7 +65,7 @@ Do not commit real passwords or production connection strings.
 3. Add your IP address to Atlas Network Access.
 4. Copy the connection string into `MONGODB_URI`.
 5. Keep `MONGODB_DB_NAME=crisisweave_db`.
-6. Run the seed script to create demo users/resources.
+6. Run the seed script to create Hyderabad demo users/resources.
 
 ## Commands
 
@@ -76,134 +98,66 @@ Main API endpoints:
 - `POST /api/admin/seed`
 - `POST /api/admin/reset-demo-data`
 
-## Collections
+## Key Collections
 
 ### `upload_batches`
 
-Stores one document per uploaded JSON transcript bundle. Tracks bundle-level progress with counts and status.
-
-Indexes: default `_id`.
+Stores uploaded JSON bundle metadata and processing counts.
 
 ### `incoming_calls`
 
-Stores every raw transcript record from uploaded JSON bundles, including duplicates. Later AI services can populate `extractedData`, link calls to incidents, and mark duplicates.
-
-Indexes:
-
-- `batchId`
-- `processingStatus`
-- `linkedIncidentId`
-- `callDate`
-- `location` 2dsphere
+Stores every raw transcript record, including duplicates.
 
 ### `incidents`
 
-Stores deduplicated emergency incidents. These documents become the main operational objects for prioritization, dispatch, alerts, dashboards, and admin review.
-
-Indexes:
-
-- unique `incidentCode`
-- `incidentType`
-- `severity`
-- `status`
-- `priorityScore`
-- `createdAt`
-- `location` 2dsphere
+Stores deduplicated emergency incidents after agent reasoning.
 
 ### `resources`
 
-Stores dispatchable response units such as ambulances, fire trucks, police, rescue teams, utility teams, and animal rescue.
-
-Indexes:
-
-- unique `resourceCode`
-- `resourceType`
-- `status`
-- `assignedIncidentId`
-- `currentLocation` 2dsphere
+Stores Hyderabad response units and availability.
 
 ### `dispatches`
 
-Stores assignment decisions and lightweight routing outputs for demo and auditability.
-
-Indexes:
-
-- unique `dispatchCode`
-- `incidentId`
-- `resourceId`
-- `status`
-- `dispatchedAt`
+Stores final dispatch decisions, distance, ETA, and decision rationale.
 
 ### `alerts`
 
-Stores simulated alert records for nearby organizations. These records are for dashboard visibility only; no SMS, phone, or email delivery is performed.
-
-Indexes:
-
-- unique `alertCode`
-- `incidentId`
-- `alertType`
-- `status`
-- `generatedAt`
-
-### `system_logs`
-
-Stores human-readable pipeline events for demos, audits, and debugging.
+Stores simulated organization alerts for dashboard visibility only.
 
 ### `agent_traces`
 
-Stores agent graph memory: agent name, goal, input, output, reasoning, decision, optional critique, graph run ID, retry attempt, and related batch/call/incident references.
+Stores graph memory: agent name, goal, input, output, reasoning, decision, critique, graph run ID, retry attempt, and related batch/call/incident references.
 
-Indexes:
+### `system_logs`
 
-- `eventType`
-- `batchId`
-- `incidentId`
-- `resourceId`
-- `createdAt`
+Stores high-level pipeline events for demo explainability.
 
 ### `users`
 
-Stores basic ADMIN/STAFF users for demo access control and upload ownership.
-
-Indexes:
-
-- unique `email`
-- `role`
-- `status`
+Stores seeded ADMIN/STAFF users for future authentication.
 
 ## Geospatial Fields
 
-The schemas keep the requested latitude/longitude fields and also maintain GeoJSON fields for MongoDB geospatial queries:
+The schemas keep latitude/longitude fields and also maintain GeoJSON points:
 
 - `incoming_calls.location`
 - `incidents.location`
 - `resources.currentLocation`
 - `resources.baseLocation`
 
-MongoDB requires GeoJSON points for reliable `2dsphere` indexes. Coordinates are stored as `[longitude, latitude]`.
-
-## Pipeline Support
-
-The database supports the intended CrisisWeave flow:
-
-1. Store uploaded bundle metadata in `upload_batches`.
-2. Store each transcript record in `incoming_calls`.
-3. Later AI extraction writes structured data to `incoming_calls.extractedData`.
-4. Deduplication links calls to existing or new `incidents`.
-5. Priority services update incident severity and `priorityScore`.
-6. Resource matching queries `resources` by type, status, availability, and distance.
-7. Dispatch services create `dispatches` and update incident/resource relationships.
-8. Alert services create simulated `alerts`.
-9. Every step writes explanatory events to `system_logs`.
-10. Dashboard/admin views can read each collection directly with clear relationships.
+MongoDB `2dsphere` indexes support nearby duplicate detection and resource matching.
 
 ## Seed Data
 
 `npm run seed` upserts:
 
-- Demo emergency resources across ambulance, fire, police, rescue, utility, and animal rescue types.
-- One ADMIN user.
-- One STAFF user.
+- 5 ambulances
+- 5 fire trucks
+- 4 police units
+- 3 rescue teams
+- 2 utility teams
+- 1 animal rescue unit
+- one ADMIN user
+- one STAFF user
 
-Change the seed emails and passwords through environment variables before using the demo with other people.
+All resources use realistic Hyderabad coordinates.

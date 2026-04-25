@@ -6,7 +6,8 @@
 flowchart LR
   Judge["Judge / User"] --> Client["Next.js + Tailwind Dashboard"]
   Client --> UploadAPI["POST /api/uploads/json"]
-  Client --> ReadAPIs["Dashboard + Data APIs"]
+  Client --> ReadAPIs["Dashboard + Admin Data APIs"]
+
   UploadAPI --> Batch["upload_batches"]
   UploadAPI --> Calls["incoming_calls"]
   Calls --> Graph["Agentic Execution Graph"]
@@ -23,10 +24,10 @@ flowchart LR
     Critic -- "not optimal, retry limit not reached" --> Resource
   end
 
-  subgraph Reasoning["Reasoning Provider Chain"]
+  subgraph Reasoning["LLM Reasoning Provider Chain"]
     Gemini["Gemini API Primary"]
     Groq["Groq API Fallback"]
-    Local["Structured Local Fallback"]
+    Local["Local Deterministic Safety Fallback"]
     Gemini --> Groq --> Local
   end
 
@@ -55,7 +56,9 @@ sequenceDiagram
   participant U as User
   participant API as Upload API
   participant G as Agent Graph
-  participant L as Gemini/Groq/Fallback
+  participant Gemini as Gemini API
+  participant Groq as Groq API
+  participant Fallback as Local Fallback
   participant DB as MongoDB Atlas
 
   U->>API: Upload JSON bundle
@@ -63,35 +66,45 @@ sequenceDiagram
   loop Each transcript
     API->>DB: Store incoming call
     API->>G: executeGraph(call)
-    G->>L: Triage Agent reasoning
-    G->>DB: Save extractedData + agent trace
-    G->>L: Dedup Agent reasoning
-    alt Duplicate
-      G->>DB: Update existing incident
-    else New incident
-      G->>L: Priority Agent reasoning
-      G->>DB: Create incident
-      G->>L: Resource Agent ranking
-      G->>L: Routing Agent ETA reasoning
-      G->>L: Dispatch Agent final decision
-      G->>DB: Create dispatches + mark resources busy
-      G->>L: Critic Agent evaluation
-      alt Not optimal and retry available
-        G->>L: Re-run resource/routing/dispatch with refinement hints
-      end
-      G->>DB: Create simulated alerts
+    G->>Gemini: Ask agent for structured reasoning
+    alt Gemini unavailable/fails
+      G->>Groq: Ask same agent for structured reasoning
     end
-    G->>DB: Store system logs and agent traces
+    alt Groq unavailable/fails
+      G->>Fallback: Run deterministic safety logic
+    end
+    G->>DB: Save agent trace
+    G->>DB: Save extracted data / incident / dispatch / alert changes
+    G->>DB: Save system log
   end
   API->>DB: Mark batch completed
+```
+
+## Decision Flow
+
+```mermaid
+flowchart TD
+  Start["Incoming transcript"] --> Triage["Triage Agent extracts emergency structure"]
+  Triage --> Dedup["Dedup Agent compares active incidents"]
+  Dedup -->|duplicate| Update["Update existing incident + duplicate count"]
+  Dedup -->|new| Priority["Priority Agent scores urgency"]
+  Priority --> Resource["Resource Agent ranks available resources"]
+  Resource --> Routing["Routing Agent estimates distance + ETA"]
+  Routing --> Dispatch["Dispatch Agent creates assignments"]
+  Dispatch --> Critic["Critic Agent evaluates decision"]
+  Critic -->|optimal| Alerts["Create simulated alerts"]
+  Critic -->|not optimal| Refine["Apply refinement hints"]
+  Refine --> Resource
+  Alerts --> Trace["Dashboard reads system_logs + agent_traces"]
+  Update --> Trace
 ```
 
 ## Reasoning Priority
 
 Every agent follows the same provider strategy:
 
-1. Gemini API, using `GEMINI_API_KEY`.
-2. Groq API, using `GROQ_API_KEY`.
-3. Local structured fallback logic already present in the project.
+1. Gemini API using `GEMINI_API_KEY`.
+2. Groq API using `GROQ_API_KEY`.
+3. Local deterministic fallback logic only if providers fail.
 
-This keeps the demo intelligent when keys are present and stable when network/API access is unavailable.
+The project is intended to demonstrate API-key powered agentic reasoning while staying robust during demos.
