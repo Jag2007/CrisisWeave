@@ -69,8 +69,12 @@ OPENAI_MODEL=gpt-4o-mini
 Frontend env:
 
 ```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api
+BACKEND_API_URL=http://localhost:4000
+# Optional direct-browser API mode:
+# NEXT_PUBLIC_API_BASE_URL=http://localhost:4000/api
 ```
+
+On Render, set `BACKEND_API_URL` on the frontend service to your deployed Express backend URL, for example `https://crisisweave-backend.onrender.com`. The frontend calls `/api/...`, and Next proxies those requests to `${BACKEND_API_URL}/api/...`.
 
 Do not commit real API keys, passwords, or production connection strings.
 
