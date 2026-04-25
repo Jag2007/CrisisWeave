@@ -42,7 +42,6 @@ const alertSchema = new Schema<AlertDocument>(
   }
 );
 
-alertSchema.index({ alertCode: 1 }, { unique: true });
 alertSchema.index({ incidentId: 1 });
 alertSchema.index({ alertType: 1 });
 alertSchema.index({ status: 1 });

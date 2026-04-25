@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
 import helmet from "helmet";
+import { apiRouter } from "./routes/api.routes";
 import { getDatabaseHealth } from "./services/databaseHealth.service";
 
 export function createApp(): express.Express {
@@ -22,6 +23,8 @@ export function createApp(): express.Express {
       next(error);
     }
   });
+
+  app.use("/api", apiRouter);
 
   app.use(
     (

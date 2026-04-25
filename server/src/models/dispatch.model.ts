@@ -50,7 +50,6 @@ const dispatchSchema = new Schema<DispatchDocument>(
   }
 );
 
-dispatchSchema.index({ dispatchCode: 1 }, { unique: true });
 dispatchSchema.index({ incidentId: 1 });
 dispatchSchema.index({ resourceId: 1 });
 dispatchSchema.index({ status: 1 });

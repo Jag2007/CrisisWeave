@@ -27,7 +27,6 @@ const userSchema = new Schema<UserDocument>(
   }
 );
 
-userSchema.index({ email: 1 }, { unique: true });
 userSchema.index({ role: 1 });
 userSchema.index({ status: 1 });
 

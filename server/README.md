@@ -1,8 +1,8 @@
 # CrisisWeave Server
 
-MongoDB/Mongoose foundation for **CrisisWeave - Smart City Dynamic Dispatch Grid**.
+Node.js/Express/MongoDB API for **CrisisWeave - Smart City Dynamic Dispatch Grid**.
 
-This server does not implement the AI extraction, deduplication, routing, alert delivery, or frontend yet. It prepares the database layer those services will use.
+This backend accepts uploaded JSON transcript bundles, stores raw calls, runs deterministic triage, deduplicates nearby active incidents, scores priority, assigns Hyderabad resources, creates dispatches, generates simulated alert records, and logs every pipeline step.
 
 ## Tech Stack
 
@@ -20,6 +20,8 @@ Copy `server/.env.example` to `server/.env` and fill in your Atlas credentials.
 MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/?retryWrites=true&w=majority
 MONGODB_DB_NAME=crisisweave_db
 PORT=4000
+DEDUP_RADIUS_KM=1
+DEDUP_WINDOW_MINUTES=60
 SEED_ADMIN_EMAIL=admin@crisisweave.local
 SEED_ADMIN_PASSWORD=change-me-admin-password
 SEED_STAFF_EMAIL=staff@crisisweave.local
@@ -51,6 +53,21 @@ Health endpoints:
 
 - `GET /health`
 - `GET /health/database`
+
+Main API endpoints:
+
+- `POST /api/uploads/json`
+- `GET /api/dashboard/summary`
+- `GET /api/incoming-calls`
+- `GET /api/incidents`
+- `GET /api/incidents/:id`
+- `GET /api/resources`
+- `GET /api/dispatches`
+- `GET /api/alerts`
+- `GET /api/system-logs`
+- `GET /api/upload-batches`
+- `POST /api/admin/seed`
+- `POST /api/admin/reset-demo-data`
 
 ## Collections
 

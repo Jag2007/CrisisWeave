@@ -65,7 +65,6 @@ resourceSchema.pre("validate", function syncResourceLocations(next) {
   next();
 });
 
-resourceSchema.index({ resourceCode: 1 }, { unique: true });
 resourceSchema.index({ resourceType: 1 });
 resourceSchema.index({ status: 1 });
 resourceSchema.index({ assignedIncidentId: 1 });

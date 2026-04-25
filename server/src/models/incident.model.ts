@@ -77,7 +77,6 @@ incidentSchema.pre("validate", function syncIncidentLocation(next) {
   next();
 });
 
-incidentSchema.index({ incidentCode: 1 }, { unique: true });
 incidentSchema.index({ incidentType: 1 });
 incidentSchema.index({ severity: 1 });
 incidentSchema.index({ status: 1 });
