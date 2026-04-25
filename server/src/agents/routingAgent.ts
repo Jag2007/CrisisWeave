@@ -1,4 +1,5 @@
 import { estimateArrivalMinutes } from "../utils/distance";
+import { reasonWithLlmOrFallback } from "../services/llm.service";
 import type { ResourceType } from "../utils/enums";
 import { BaseAgent, type AgentContext, type AgentResult } from "./baseAgent";
 
@@ -23,6 +24,8 @@ interface RoutingOutput extends Record<string, unknown> {
     estimatedArrivalMinutes: number;
     routeSummary: string;
   }>;
+  reasoning?: string;
+  decision?: string;
 }
 
 export class RoutingAgent extends BaseAgent<RoutingInput, RoutingOutput> {
@@ -39,10 +42,23 @@ export class RoutingAgent extends BaseAgent<RoutingInput, RoutingOutput> {
       routeSummary: `Haversine demo route for ${candidate.resourceCode}: ${candidate.distanceKm} km at configured ${candidate.resourceType} response speed.`
     }));
 
+    const llm = await reasonWithLlmOrFallback<Pick<RoutingOutput, "reasoning" | "decision">>({
+      agentName: this.name,
+      goal: this.goal,
+      input: { selectedCandidates: input.selectedCandidates, computedRoutes: routes },
+      outputContract:
+        '{ "reasoning": string explaining distance/ETA implications, "decision": string summarizing route readiness }',
+      fallback: () => ({
+        reasoning: "Used haversine distance from resource location to incident and resource-type average speed to estimate arrival.",
+        decision: routes.length ? `Computed ${routes.length} route estimates.` : "No routes computed because no resources were selected."
+      })
+    });
+
     return {
       output: { routes },
-      reasoning: "Used haversine distance from resource location to incident and resource-type average speed to estimate arrival.",
-      decision: routes.length ? `Computed ${routes.length} route estimates.` : "No routes computed because no resources were selected."
+      reasoning: llm.data.reasoning || `Provider ${llm.provider}: computed route estimates using deterministic routing math.`,
+      decision: llm.data.decision || (routes.length ? `Computed ${routes.length} route estimates.` : "No routes computed because no resources were selected."),
+      critique: llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`
     };
   }
 }

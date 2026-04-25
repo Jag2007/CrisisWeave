@@ -26,7 +26,13 @@ Goal
 server/   Node.js + Express + TypeScript + MongoDB/Mongoose API
 client/   Next.js + Tailwind dashboard
 data/     Sample JSON emergency transcript bundles
+docs/     Architecture diagram and project report
 ```
+
+Detailed docs:
+
+- [System architecture](docs/SYSTEM_ARCHITECTURE.md)
+- [Project report](docs/PROJECT_REPORT.md)
 
 ## Run Backend
 
@@ -45,6 +51,10 @@ MONGODB_DB_NAME=crisisweave_db
 PORT=4000
 DEDUP_RADIUS_KM=1
 DEDUP_WINDOW_MINUTES=60
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+GROQ_API_KEY=
+GROQ_MODEL=llama-3.3-70b-versatile
 ```
 
 ## Run Frontend
@@ -123,7 +133,7 @@ List endpoints support `page`, `limit`, `status`, `severity`, `incidentType`, `r
 ## Notes
 
 - The prototype works without AI API keys.
-- Agent reasoning currently uses structured deterministic reasoning templates, with `GEMINI_API_KEY` and `GROQ_API_KEY` placeholders reserved for optional LLM-backed reasoning.
+- Agent reasoning is Gemini-first, Groq-second, and structured local fallback if both providers are unavailable or fail.
 - No real SMS/email/phone alerts are sent.
 - Authentication is intentionally not implemented yet, per current scope.
 - MongoDB geospatial fields use GeoJSON points with `2dsphere` indexes.

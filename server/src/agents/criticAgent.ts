@@ -1,4 +1,5 @@
 import type { ResourceType, Severity } from "../utils/enums";
+import { reasonWithLlmOrFallback } from "../services/llm.service";
 import { BaseAgent, type AgentContext, type AgentResult } from "./baseAgent";
 
 interface CriticInput extends Record<string, unknown> {
@@ -17,6 +18,8 @@ interface CriticOutput extends Record<string, unknown> {
   isDecisionOptimal: boolean;
   improvementSuggestions: string[];
   refinementHints: string[];
+  reasoning?: string;
+  decision?: string;
 }
 
 export class CriticAgent extends BaseAgent<CriticInput, CriticOutput> {
@@ -39,19 +42,49 @@ export class CriticAgent extends BaseAgent<CriticInput, CriticOutput> {
       refinementHints.push("prioritize_closer_units");
     }
 
-    const isDecisionOptimal = suggestions.length === 0 || input.retryAttempt >= 1;
+    const deterministic = {
+      isDecisionOptimal: suggestions.length === 0 || input.retryAttempt >= 1,
+      improvementSuggestions: suggestions,
+      refinementHints
+    };
+
+    const llm = await reasonWithLlmOrFallback<CriticOutput>({
+      agentName: this.name,
+      goal: this.goal,
+      input: { ...input, deterministicCritique: deterministic },
+      outputContract:
+        '{ "isDecisionOptimal": boolean, "improvementSuggestions": string[], "refinementHints": string[], "reasoning": string, "decision": string }',
+      fallback: () => deterministic
+    });
+
+    const safeOutput = sanitizeCritic(llm.data, deterministic, input.retryAttempt);
 
     return {
-      output: {
-        isDecisionOptimal,
-        improvementSuggestions: suggestions,
-        refinementHints
-      },
-      reasoning: suggestions.length
-        ? `I found ${suggestions.length} concern(s): ${suggestions.join(" ")}`
-        : "All required resource types are covered and ETAs are acceptable for the incident severity.",
-      decision: isDecisionOptimal ? "Accept dispatch decision." : "Refine resource ranking and dispatch once more.",
-      critique: suggestions.join(" ")
+      output: safeOutput,
+      reasoning:
+        llm.data.reasoning ||
+        (safeOutput.improvementSuggestions.length
+          ? `Provider ${llm.provider}: found ${safeOutput.improvementSuggestions.length} concern(s): ${safeOutput.improvementSuggestions.join(" ")}`
+          : `Provider ${llm.provider}: all required resource types are covered and ETAs are acceptable.`),
+      decision: llm.data.decision || (safeOutput.isDecisionOptimal ? "Accept dispatch decision." : "Refine resource ranking and dispatch once more."),
+      critique:
+        safeOutput.improvementSuggestions.join(" ") ||
+        (llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`)
     };
   }
+}
+
+function sanitizeCritic(output: CriticOutput, deterministic: CriticOutput, retryAttempt: number): CriticOutput {
+  const suggestions = Array.isArray(output.improvementSuggestions)
+    ? output.improvementSuggestions.map(String)
+    : deterministic.improvementSuggestions;
+  const hints = Array.isArray(output.refinementHints)
+    ? output.refinementHints.map(String)
+    : deterministic.refinementHints;
+
+  return {
+    isDecisionOptimal: retryAttempt >= 1 ? true : Boolean(output.isDecisionOptimal ?? deterministic.isDecisionOptimal),
+    improvementSuggestions: suggestions,
+    refinementHints: hints
+  };
 }

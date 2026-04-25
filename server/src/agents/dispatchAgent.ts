@@ -1,6 +1,7 @@
 import { Dispatch, Incident, Resource } from "../models";
 import { generateCode } from "../utils/codeGenerator";
 import type { ResourceType, Severity } from "../utils/enums";
+import { reasonWithLlmOrFallback } from "../services/llm.service";
 import { writeSystemLog } from "../services/systemLog.service";
 import { BaseAgent, type AgentContext, type AgentResult } from "./baseAgent";
 
@@ -39,6 +40,8 @@ interface DispatchOutput extends Record<string, unknown> {
     decisionReason: string;
   }>;
   missingResourceTypes: ResourceType[];
+  reasoning?: string;
+  decision?: string;
 }
 
 export class DispatchAgent extends BaseAgent<DispatchInput, DispatchOutput> {
@@ -48,9 +51,31 @@ export class DispatchAgent extends BaseAgent<DispatchInput, DispatchOutput> {
   protected async reason(input: DispatchInput, context: AgentContext): Promise<AgentResult<DispatchOutput>> {
     const dispatches: DispatchOutput["dispatches"] = [];
     const missingResourceTypes: ResourceType[] = [];
+    const llm = await reasonWithLlmOrFallback<{
+      selectedResourceIdsByType: Record<string, string>;
+      reasoning?: string;
+      decision?: string;
+    }>({
+      agentName: this.name,
+      goal: this.goal,
+      input,
+      outputContract:
+        '{ "selectedResourceIdsByType": object mapping each required resource type to exactly one resourceId from rankedResourcesByType, "reasoning": string, "decision": string }',
+      fallback: () => ({
+        selectedResourceIdsByType: Object.fromEntries(
+          Object.entries(input.rankedResourcesByType).map(([resourceType, candidates]) => [
+            resourceType,
+            candidates[0]?.resourceId
+          ])
+        ),
+        reasoning: "Selected the highest-ranked resource for each required type.",
+        decision: "Finalize dispatches for top-ranked resources."
+      })
+    });
 
     for (const [resourceType, candidates] of Object.entries(input.rankedResourcesByType) as Array<[ResourceType, DispatchInput["rankedResourcesByType"][string]]>) {
-      const best = candidates[0];
+      const preferredId = llm.data.selectedResourceIdsByType?.[resourceType];
+      const best = candidates.find((candidate) => candidate.resourceId === preferredId) || candidates[0];
       if (!best) {
         missingResourceTypes.push(resourceType);
         continue;
@@ -120,9 +145,16 @@ export class DispatchAgent extends BaseAgent<DispatchInput, DispatchOutput> {
 
     return {
       output: { dispatches, missingResourceTypes },
-      reasoning: "Selected the top-ranked available resource for each required type, then persisted dispatch records and marked assigned units busy.",
-      decision: dispatches.length ? `Created ${dispatches.length} dispatch decisions.` : "No dispatch created because no required resources were available.",
-      critique: missingResourceTypes.length ? `Missing required resource types: ${missingResourceTypes.join(", ")}.` : undefined
+      reasoning:
+        llm.data.reasoning ||
+        `Provider ${llm.provider}: selected resources from the ranked candidate lists, then persisted dispatch records and marked assigned units busy.`,
+      decision: llm.data.decision || (dispatches.length ? `Created ${dispatches.length} dispatch decisions.` : "No dispatch created because no required resources were available."),
+      critique:
+        missingResourceTypes.length
+          ? `Missing required resource types: ${missingResourceTypes.join(", ")}.`
+          : llm.provider === "structured_fallback"
+            ? llm.error
+            : `Reasoning provider: ${llm.provider}`
     };
   }
 }
