@@ -4,6 +4,7 @@ import { resetDemo, seedDemo } from "../controllers/admin.controller";
 import { dashboardSummary } from "../controllers/dashboard.controller";
 import { createListHandler, incidentDetail } from "../controllers/list.controller";
 import { uploadJson } from "../controllers/upload.controller";
+import { getDatabaseHealth } from "../services/databaseHealth.service";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -11,6 +12,15 @@ const upload = multer({
 });
 
 export const apiRouter = Router();
+
+apiRouter.get("/health", async (_req, res, next) => {
+  try {
+    const health = await getDatabaseHealth();
+    res.status(health.ok ? 200 : 503).json(health);
+  } catch (error) {
+    next(error);
+  }
+});
 
 apiRouter.post("/uploads/json", upload.single("file"), uploadJson);
 
