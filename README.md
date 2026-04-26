@@ -42,6 +42,7 @@ Reasoning is powered by API keys:
 server/   Node.js + Express + TypeScript + MongoDB/Mongoose API
 client/   Next.js + Tailwind dashboard
 data/     Hyderabad sample JSON emergency transcript bundle
+assets/   README images and project visual assets
 docs/     Architecture diagram and full project report
 ```
 
@@ -49,6 +50,14 @@ Detailed docs:
 
 - [System architecture](docs/SYSTEM_ARCHITECTURE.md)
 - [Project report](docs/PROJECT_REPORT.md)
+
+## High-Level Architecture
+
+![CrisisWeave high-level architecture](assets/Architecture.png)
+
+## Decision Flow
+
+![CrisisWeave decision flow](assets/Decision_Flow.png)
 
 ## Environment Setup
 
