@@ -19,7 +19,8 @@ interface LlmRequest<T> {
   fallback: () => T | Promise<T>;
 }
 
-const groqModel = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+// Groq retired the llama-3.x models, so the default is now gpt-oss-20b (fast, cheap, good at JSON).
+const groqModel = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 const openAiModel = process.env.OPENAI_MODEL || "gpt-4o-mini";
 
 function buildPrompt(request: Omit<LlmRequest<unknown>, "fallback">): string {
@@ -29,7 +30,8 @@ function buildPrompt(request: Omit<LlmRequest<unknown>, "fallback">): string {
     "Return ONLY valid JSON. No markdown. No prose outside JSON.",
     `Output contract: ${request.outputContract}`,
     "Input:",
-    JSON.stringify(request.input, null, 2)
+    // Compact JSON keeps each call small; the free Groq tier allows ~8k tokens per minute.
+    JSON.stringify(request.input)
   ].join("\n\n");
 }
 
@@ -46,30 +48,45 @@ function parseJsonObject<T>(text: string): T {
   }
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function callGroq<T>(prompt: string): Promise<{ data: T; rawText: string }> {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
     throw new Error("GROQ_API_KEY is not configured.");
   }
 
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: groqModel,
-      temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content: "You are an emergency dispatch reasoning agent. Return only strict JSON."
-        },
-        { role: "user", content: prompt }
-      ]
-    })
-  });
+  const send = () =>
+    fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: groqModel,
+        temperature: 0.2,
+        response_format: { type: "json_object" },
+        // gpt-oss models "think" before answering; low effort keeps them fast and token-light.
+        ...(groqModel.startsWith("openai/gpt-oss") ? { reasoning_effort: "low" } : {}),
+        messages: [
+          {
+            role: "system",
+            content: "You are an emergency dispatch reasoning agent. Return only strict JSON."
+          },
+          { role: "user", content: prompt }
+        ]
+      })
+    });
+
+  let response = await send();
+
+  // On a rate limit, wait as long as Groq asks (max 20s) and try once more.
+  if (response.status === 429) {
+    const waitSeconds = Math.min(20, Number(response.headers.get("retry-after")) || 5);
+    await sleep(waitSeconds * 1000);
+    response = await send();
+  }
 
   if (!response.ok) {
     throw new Error(`Groq request failed with ${response.status}: ${await response.text()}`);

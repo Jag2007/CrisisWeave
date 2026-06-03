@@ -36,12 +36,14 @@ export class DedupAgent extends BaseAgent<DedupInput, DedupOutput> {
       reportedAt: new Date(input.reportedAt)
     });
 
+    // Only send the fields the LLM needs to compare, not whole documents.
     const candidates = await Incident.find({
       incidentType: input.incidentType,
       status: { $nin: ["RESOLVED", "CLOSED"] }
     })
+      .select("incidentCode title locationText latitude longitude firstReportedAt")
       .sort({ lastUpdatedFromCallAt: -1 })
-      .limit(8)
+      .limit(5)
       .lean();
 
     const llm = await reasonWithLlmOrFallback<DedupOutput>({

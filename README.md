@@ -70,7 +70,7 @@ PORT=4000
 DEDUP_RADIUS_KM=1
 DEDUP_WINDOW_MINUTES=60
 GROQ_API_KEY=<your-groq-api-key>
-GROQ_MODEL=llama-3.3-70b-versatile
+GROQ_MODEL=openai/gpt-oss-20b
 OPENAI_API_KEY=<your-openai-api-key>
 OPENAI_MODEL=gpt-4o-mini
 ```
