@@ -1,9 +1,11 @@
 import mongoose from "mongoose";
-import { getDatabaseState } from "../config/database";
+import { getDatabaseMode, getDatabaseState } from "../config/database";
 
 export interface DatabaseHealth {
   ok: boolean;
   state: string;
+  mode: string;
+  reasoningModel: string;
   databaseName?: string;
   host?: string;
   collections?: string[];
@@ -18,6 +20,8 @@ export async function getDatabaseHealth(): Promise<DatabaseHealth> {
     return {
       ok: false,
       state,
+      mode: getDatabaseMode(),
+      reasoningModel: reasoningModel(),
       checkedAt: new Date().toISOString()
     };
   }
@@ -28,9 +32,18 @@ export async function getDatabaseHealth(): Promise<DatabaseHealth> {
   return {
     ok: true,
     state,
+    mode: getDatabaseMode(),
+    reasoningModel: reasoningModel(),
     databaseName: connection.db.databaseName,
     host: connection.host,
     collections: collections.map((collection) => collection.name).sort(),
     checkedAt: new Date().toISOString()
   };
+}
+
+// Shown in the dashboard header so you can tell at a glance which brain the agents are using.
+function reasoningModel(): string {
+  if (process.env.GROQ_API_KEY) return `groq:${process.env.GROQ_MODEL || "openai/gpt-oss-20b"}`;
+  if (process.env.OPENAI_API_KEY) return `openai:${process.env.OPENAI_MODEL || "gpt-4o-mini"}`;
+  return "rules-only";
 }
