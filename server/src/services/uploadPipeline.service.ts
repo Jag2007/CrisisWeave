@@ -43,51 +43,6 @@ function normalizeRecords(payload: unknown): NormalizedTranscriptRecord[] {
     .filter((record) => record.rawTranscript.length > 0);
 }
 
-export async function processUploadedJson(input: {
-  payload: unknown;
-  originalFileName: string;
-  uploadedBy?: string;
-  uploadSource?: string;
-}): Promise<{
-  batchId: string;
-  totalRecords: number;
-  processedRecords: number;
-  failedRecords: number;
-  incidentsCreated: number;
-  duplicatesFound: number;
-}> {
-  const records = normalizeRecords(input.payload);
-
-  if (records.length === 0) {
-    throw new Error("No transcript records found. Upload an array, { records: [...] }, or { transcripts: [...] }.");
-  }
-
-  const batch = await UploadBatch.create({
-    originalFileName: input.originalFileName,
-    uploadedBy: input.uploadedBy,
-    totalRecords: records.length,
-    processedRecords: 0,
-    failedRecords: 0,
-    status: "PROCESSING",
-    uploadSource: input.uploadSource || "json_upload"
-  });
-
-  await writeSystemLog({
-    eventType: "BATCH_UPLOADED",
-    message: `${records.length} transcript records uploaded from ${input.originalFileName}.`,
-    batchId: batch._id,
-    metadata: { originalFileName: input.originalFileName, executionMode: "agent_graph" }
-  });
-
-  const result = await processBatchRecords(batch._id, records);
-
-  return {
-    batchId: batch._id.toString(),
-    totalRecords: records.length,
-    ...result
-  };
-}
-
 export async function startUploadedJsonProcessing(input: {
   payload: unknown;
   originalFileName: string;
