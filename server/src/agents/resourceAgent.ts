@@ -103,6 +103,7 @@ export class ResourceAgent extends BaseAgent<ResourceInput, ResourceOutput> {
         ? `Best candidates selected where possible; missing ${finalMissing.join(", ")}.`
         : "Candidate resources ranked for every required type."
       ),
+      provider: llm.provider,
       critique: llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`
     };
   }

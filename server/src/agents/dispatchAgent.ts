@@ -149,6 +149,7 @@ export class DispatchAgent extends BaseAgent<DispatchInput, DispatchOutput> {
         llm.data.reasoning ||
         `Provider ${llm.provider}: selected resources from the ranked candidate lists, then persisted dispatch records and marked assigned units busy.`,
       decision: llm.data.decision || (dispatches.length ? `Created ${dispatches.length} dispatch decisions.` : "No dispatch created because no required resources were available."),
+      provider: llm.provider,
       critique:
         missingResourceTypes.length
           ? `Missing required resource types: ${missingResourceTypes.join(", ")}.`

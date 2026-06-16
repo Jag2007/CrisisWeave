@@ -58,6 +58,7 @@ export class RoutingAgent extends BaseAgent<RoutingInput, RoutingOutput> {
       output: { routes },
       reasoning: llm.data.reasoning || `Provider ${llm.provider}: computed route estimates using deterministic routing math.`,
       decision: llm.data.decision || (routes.length ? `Computed ${routes.length} route estimates.` : "No routes computed because no resources were selected."),
+      provider: llm.provider,
       critique: llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`
     };
   }

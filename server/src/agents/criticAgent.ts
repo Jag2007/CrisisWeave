@@ -77,6 +77,7 @@ export class CriticAgent extends BaseAgent<CriticInput, CriticOutput> {
       output: safeOutput,
       reasoning,
       decision,
+      provider: llm.provider,
       critique:
         safeOutput.improvementSuggestions.join(" ") ||
         (llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`)

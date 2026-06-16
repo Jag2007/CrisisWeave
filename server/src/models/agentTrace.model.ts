@@ -13,6 +13,7 @@ export interface AgentTraceDocument {
   reasoning: string;
   decision: string;
   critique?: string;
+  provider?: string;
   batchId?: Types.ObjectId;
   incomingCallId?: Types.ObjectId;
   incidentId?: Types.ObjectId;
@@ -32,6 +33,8 @@ const agentTraceSchema = new Schema<AgentTraceDocument>(
     reasoning: { type: String, required: true },
     decision: { type: String, required: true },
     critique: { type: String },
+    // Which reasoning source made this step: groq, openai or structured_fallback (rules).
+    provider: { type: String },
     batchId: { type: Schema.Types.ObjectId, ref: "UploadBatch" },
     incomingCallId: { type: Schema.Types.ObjectId, ref: "IncomingCall" },
     incidentId: { type: Schema.Types.ObjectId, ref: "Incident" }

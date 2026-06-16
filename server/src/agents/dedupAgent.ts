@@ -76,6 +76,7 @@ export class DedupAgent extends BaseAgent<DedupInput, DedupOutput> {
           ? `Provider ${llm.provider}: matched an active ${input.incidentType} candidate within the configured duplicate logic.`
           : `Provider ${llm.provider}: no active ${input.incidentType} incident should be merged.`),
       decision: llm.data.decision || (matched ? `Treat as duplicate of ${matched.incidentCode}.` : "Create a new incident."),
+      provider: llm.provider,
       critique: llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`
     };
   }

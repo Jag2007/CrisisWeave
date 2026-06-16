@@ -45,6 +45,7 @@ export class PriorityAgent extends BaseAgent<PriorityInput, PriorityOutput> {
       output: { priorityScore, explanation },
       reasoning: llm.data.reasoning || `Provider ${llm.provider}: ${explanation}`,
       decision: llm.data.decision || `Priority score set to ${priorityScore}.`,
+      provider: llm.provider,
       critique: llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`
     };
   }

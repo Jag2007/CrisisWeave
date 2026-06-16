@@ -1,5 +1,6 @@
 import type { Types } from "mongoose";
 import { AgentTrace } from "../models";
+import type { LlmProvider } from "../services/llm.service";
 import type { AgentName } from "../utils/enums";
 
 export interface AgentContext {
@@ -16,6 +17,7 @@ export interface AgentResult<TOutput extends Record<string, unknown>> {
   reasoning: string;
   decision: string;
   critique?: string;
+  provider?: LlmProvider;
 }
 
 export abstract class BaseAgent<TInput extends Record<string, unknown>, TOutput extends Record<string, unknown>> {
@@ -36,6 +38,7 @@ export abstract class BaseAgent<TInput extends Record<string, unknown>, TOutput 
       reasoning: result.reasoning,
       decision: result.decision,
       critique: result.critique,
+      provider: result.provider,
       batchId: context.batchId,
       incomingCallId: context.incomingCallId,
       incidentId: context.incidentId

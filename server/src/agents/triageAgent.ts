@@ -75,6 +75,7 @@ export class TriageAgent extends BaseAgent<TriageInput, TriageOutput> {
       decision:
         String(llm.data.decision || "") ||
         `Provider ${llm.provider}: classified as ${triage.incidentType}; requires ${triage.requiredResourceTypes.join(", ")}.`,
+      provider: llm.provider,
       critique: llm.provider === "structured_fallback" ? llm.error : `Reasoning provider: ${llm.provider}`
     };
   }
