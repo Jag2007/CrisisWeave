@@ -1,75 +1,74 @@
 "use client";
 
-// Reusable live list view for database collections. It polls so long-running
-// upload batches remain visible even when the user navigates between pages.
-import { useEffect, useRef, useState } from "react";
-import { Skeleton } from "antd";
-import { apiGet, type ApiListResponse } from "../lib/api";
+// Generic "list a collection" page: header, optional filter chips, live table.
+import { useState } from "react";
+import type React from "react";
+import type { ApiListResponse } from "../lib/api";
+import { usePolling } from "../lib/usePolling";
+import { humanize } from "../lib/format";
 import { DataTable, type Column } from "./DataTable";
+import { ErrorState, LoadingBlock, PageHeader } from "./ui";
+
+type Filter = { param: string; options: string[] };
 
 export function ListPage<T extends { _id?: string }>({
   title,
   description,
   endpoint,
-  columns
+  columns,
+  filter,
+  empty,
+  emptyHint
 }: {
   title: string;
   description: string;
   endpoint: string;
   columns: Column<T>[];
+  filter?: Filter;
+  empty?: string;
+  emptyHint?: React.ReactNode;
 }) {
-  const [rows, setRows] = useState<T[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const lastRowsSnapshot = useRef("");
-
-  useEffect(() => {
-    let active = true;
-
-    const load = (initial = false) => {
-      apiGet<ApiListResponse<T>>(`${endpoint}?limit=50`)
-        .then((data) => {
-          if (!active) return;
-          const nextSnapshot = JSON.stringify(data.items);
-          if (nextSnapshot !== lastRowsSnapshot.current) {
-            lastRowsSnapshot.current = nextSnapshot;
-            setRows(data.items);
-          }
-          setError(null);
-        })
-        .catch((err) => {
-          if (!active) return;
-          if (initial || !lastRowsSnapshot.current) {
-            setError(err instanceof Error ? err.message : "Failed to load records");
-          }
-        })
-        .finally(() => {
-          if (!active) return;
-          setLoading(false);
-        });
-    };
-
-    load(true);
-    const timer = window.setInterval(() => load(false), 3000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [endpoint]);
+  const [selected, setSelected] = useState<string>("");
+  const query = selected && filter ? `&${filter.param}=${selected}` : "";
+  const { data, error, loading, reload } = usePolling<ApiListResponse<T>>(`${endpoint}?limit=50${query}`);
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold text-ink">{title}</h2>
-        <p className="mt-1 text-sm text-slate-500">{description}</p>
-      </div>
-      {loading ? (
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <Skeleton active paragraph={{ rows: 7 }} title={{ width: "30%" }} />
+    <div>
+      <PageHeader
+        title={title}
+        description={description}
+        actions={
+          data ? (
+            <span className="eyebrow self-end">
+              {data.pagination.total} record{data.pagination.total === 1 ? "" : "s"}
+            </span>
+          ) : null
+        }
+      />
+
+      {filter ? (
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {["", ...filter.options].map((option) => (
+            <button
+              key={option || "all"}
+              onClick={() => setSelected(option)}
+              className={`h-7 rounded border px-2.5 text-xs transition-colors ${
+                selected === option
+                  ? "border-slate bg-slate text-white"
+                  : "border-rule bg-surface text-slate hover:border-slate/40"
+              }`}
+            >
+              {option ? humanize(option) : "All"}
+            </button>
+          ))}
         </div>
       ) : null}
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
-      {!loading && !error ? <DataTable columns={columns} rows={rows} /> : null}
+
+      {error ? <ErrorState message={error} onRetry={reload} /> : null}
+      {loading && !error ? <LoadingBlock /> : null}
+      {data && !error ? (
+        <DataTable columns={columns} rows={data.items} empty={empty} emptyHint={emptyHint} />
+      ) : null}
     </div>
   );
 }

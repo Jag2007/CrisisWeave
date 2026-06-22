@@ -2,17 +2,57 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
-  background: #f8fafc;
+html,
+body {
+  background: theme("colors.paper");
+  color: theme("colors.ink");
 }
 
 body {
-  color: #111827;
+  font-family: theme("fontFamily.sans");
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
 
-button,
-a,
-input,
-select {
-  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease, transform 160ms ease;
+/* Small uppercase label used above numbers and section titles. */
+.eyebrow {
+  @apply font-mono text-[11px] uppercase tracking-[0.08em] text-muted;
+}
+
+.panel {
+  @apply rounded border border-rule bg-surface;
+}
+
+/* Placeholder bar shown while data loads. */
+.skeleton {
+  @apply rounded bg-rule/70;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* Leaflet: match the map chrome to the rest of the UI. */
+.leaflet-container {
+  font-family: theme("fontFamily.sans");
+  background: #ecebe6;
+}
+
+.leaflet-tile-pane {
+  filter: grayscale(1) contrast(0.85) brightness(1.06);
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(31, 38, 48, 0.15);
+}
+
+.leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 12px;
+  line-height: 1.45;
 }
