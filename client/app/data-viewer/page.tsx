@@ -1,47 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { apiGet } from "../../lib/api";
+// Raw JSON straight from the API, one collection at a time. Handy for debugging and for
+// showing exactly what is stored in MongoDB.
+import { useState } from "react";
+import { usePolling } from "../../lib/usePolling";
+import { ErrorState, PageHeader } from "../../components/ui";
 
 const collections = [
-  { label: "Upload Batches", endpoint: "/upload-batches" },
-  { label: "Incoming Calls", endpoint: "/incoming-calls" },
+  { label: "Upload batches", endpoint: "/upload-batches" },
+  { label: "Incoming calls", endpoint: "/incoming-calls" },
   { label: "Incidents", endpoint: "/incidents" },
   { label: "Resources", endpoint: "/resources" },
   { label: "Dispatches", endpoint: "/dispatches" },
   { label: "Alerts", endpoint: "/alerts" },
-  { label: "Agent Traces", endpoint: "/agent-traces" },
-  { label: "System Logs", endpoint: "/system-logs" }
+  { label: "Agent traces", endpoint: "/agent-traces" },
+  { label: "System logs", endpoint: "/system-logs" }
 ];
 
 export default function DataViewerPage() {
   const [endpoint, setEndpoint] = useState(collections[0].endpoint);
-  const [payload, setPayload] = useState<unknown>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setError(null);
-    apiGet(`${endpoint}?limit=10`)
-      .then(setPayload)
-      .catch((err) => setError(err instanceof Error ? err.message : "Failed to load collection"));
-  }, [endpoint]);
+  const { data, error, reload } = usePolling<unknown>(`${endpoint}?limit=10`, 10000);
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-bold text-ink">Data Viewer</h2>
-        <p className="mt-1 text-sm text-slate-500">Inspect raw API payloads for judging and debugging.</p>
-      </div>
-      <select value={endpoint} onChange={(event) => setEndpoint(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">
+    <div>
+      <PageHeader title="Data viewer" description="The latest 10 documents from each MongoDB collection, exactly as the API returns them." />
+      <div className="mb-4 flex flex-wrap gap-1.5">
         {collections.map((collection) => (
-          <option key={collection.endpoint} value={collection.endpoint}>
+          <button
+            key={collection.endpoint}
+            onClick={() => setEndpoint(collection.endpoint)}
+            className={`h-7 rounded border px-2.5 text-xs transition-colors ${
+              endpoint === collection.endpoint ? "border-slate bg-slate text-white" : "border-rule bg-surface text-slate hover:border-slate/40"
+            }`}
+          >
             {collection.label}
-          </option>
+          </button>
         ))}
-      </select>
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
-      <pre className="max-h-[70vh] overflow-auto rounded-lg border border-slate-200 bg-slate-950 p-4 text-xs text-slate-100 shadow-soft">
-        {JSON.stringify(payload, null, 2)}
+      </div>
+      {error ? <ErrorState message={error} onRetry={reload} /> : null}
+      <pre className="max-h-[72vh] overflow-auto rounded border border-ink bg-ink p-4 font-mono text-xs leading-relaxed text-[#d7dde4]">
+        <span className="text-[#8b95a1]">GET /api{endpoint}?limit=10{"\n\n"}</span>
+        {data ? JSON.stringify(data, null, 2) : "Loading…"}
       </pre>
     </div>
   );

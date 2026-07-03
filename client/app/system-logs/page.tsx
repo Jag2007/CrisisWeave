@@ -1,21 +1,22 @@
 "use client";
 
-import { Badge } from "../../components/DataTable";
+import { Badge, Code } from "../../components/DataTable";
 import { ListPage } from "../../components/ListPage";
-import { formatDate } from "../../lib/format";
+import { formatDate, shortId } from "../../lib/format";
 
 export default function SystemLogsPage() {
   return (
     <ListPage
-      title="System Logs"
-      description="Pipeline events that explain every automated backend step."
+      title="System logs"
+      description="A plain event log of everything the backend did, step by step. Useful for debugging a failed call."
       endpoint="/system-logs"
+      empty="Log is empty"
       columns={[
+        { key: "created", label: "Time", render: (row: any) => <span className="whitespace-nowrap font-mono text-xs text-muted">{formatDate(row.createdAt)}</span> },
         { key: "event", label: "Event", render: (row: any) => <Badge value={row.eventType} /> },
         { key: "message", label: "Message", render: (row: any) => row.message },
-        { key: "incident", label: "Incident ID", render: (row: any) => row.incidentId?.slice(-6).toUpperCase() || "-" },
-        { key: "batch", label: "Batch ID", render: (row: any) => row.batchId?.slice(-6).toUpperCase() || "-" },
-        { key: "created", label: "Created", render: (row: any) => formatDate(row.createdAt) }
+        { key: "incident", label: "Incident", render: (row: any) => <Code>{row.incidentId ? shortId(row.incidentId) : "-"}</Code> },
+        { key: "batch", label: "Batch", render: (row: any) => <Code>{row.batchId ? shortId(row.batchId) : "-"}</Code> }
       ]}
     />
   );
