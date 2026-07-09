@@ -1,15 +1,15 @@
 "use client";
 
-// Dashboard overview shows live MongoDB/agent graph status and gives admins
-// reliable seed/reset controls for the Hyderabad demo.
-import { useEffect, useRef, useState } from "react";
+// Overview: live numbers, the city map, the priority queue and the activity feed.
 import Link from "next/link";
-import { Alert, Button, Skeleton, message } from "antd";
-import { Database, FileJson, RefreshCcw, ShieldCheck } from "lucide-react";
-import { apiGet, apiPostJson } from "../lib/api";
-import { formatDate } from "../lib/format";
+import { useState } from "react";
+import { apiPostJson, type ApiListResponse } from "../lib/api";
+import { humanize, timeAgo } from "../lib/format";
+import { usePolling } from "../lib/usePolling";
 import { Badge } from "../components/Badge";
-import { MetricCard } from "../components/MetricCard";
+import { CityMap, MapLegend, type MapIncident, type MapResource } from "../components/CityMap";
+import { AgentChain } from "../components/AgentChain";
+import { Button, EmptyState, ErrorState, LoadingBlock, PageHeader, Panel } from "../components/ui";
 
 type Summary = {
   totalUploadedBatches: number;
@@ -26,161 +26,219 @@ type Summary = {
   recentSystemLogs: Array<{ _id: string; eventType: string; message: string; createdAt: string }>;
 };
 
-export default function DashboardPage() {
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const SEVERITY_ORDER = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
+const severityBar: Record<string, string> = { CRITICAL: "bg-critical", HIGH: "bg-high", MEDIUM: "bg-medium", LOW: "bg-low" };
+
+export default function OverviewPage() {
+  const summary = usePolling<{ ok: boolean; data: Summary }>("/dashboard/summary");
+  const incidents = usePolling<ApiListResponse<MapIncident & { status: string; incidentType: string }>>("/incidents?limit=100");
+  const resources = usePolling<ApiListResponse<MapResource>>("/resources?limit=100");
   const [busy, setBusy] = useState(false);
-  const lastSummarySnapshot = useRef("");
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const load = (initial = false) => {
-    apiGet<{ ok: boolean; data: Summary }>("/dashboard/summary")
-      .then((response) => {
-        const nextSnapshot = JSON.stringify(response.data);
-        if (nextSnapshot !== lastSummarySnapshot.current) {
-          lastSummarySnapshot.current = nextSnapshot;
-          setSummary(response.data);
-        }
-        setError(null);
-      })
-      .catch((err) => {
-        if (initial || !lastSummarySnapshot.current) {
-          setError(err instanceof Error ? err.message : "Unable to load dashboard");
-        }
-      });
-  };
-
-  useEffect(() => {
-    load(true);
-    const timer = window.setInterval(() => load(false), 3000);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const runSeed = async () => {
+  const runAdmin = async (path: string, done: string) => {
     setBusy(true);
+    setNotice(null);
     try {
-      await apiPostJson("/admin/seed", {});
-      message.success("Hyderabad demo users and resources seeded.");
-      load();
+      await apiPostJson(path, {});
+      setNotice(done);
+      await Promise.all([summary.reload(), incidents.reload(), resources.reload()]);
     } catch (err) {
-      message.error(err instanceof Error ? err.message : "Seed failed. Check that the backend and MongoDB are running.");
+      setNotice(err instanceof Error ? err.message : "Request failed");
     } finally {
       setBusy(false);
     }
   };
 
-  const resetDemo = async () => {
-    setBusy(true);
-    try {
-      await apiPostJson("/admin/reset-demo-data", {});
-      message.success("Demo data reset and seed data recreated.");
-      load();
-    } catch (err) {
-      message.error(err instanceof Error ? err.message : "Reset failed. Check that the backend and MongoDB are running.");
-    } finally {
-      setBusy(false);
+  const resetDemo = () => {
+    if (window.confirm("Clear all calls, incidents, dispatches and traces, then re-create the Hyderabad units?")) {
+      void runAdmin("/admin/reset-demo-data", "Demo data cleared. Units are back at base.");
     }
   };
 
-  if (error) {
-    return <Alert type="error" message="Dashboard failed to load" description={error} showIcon />;
-  }
+  if (summary.error) return <ErrorState message={summary.error} onRetry={summary.reload} />;
+
+  const s = summary.data?.data;
+  const queue = [...(incidents.data?.items || [])]
+    .filter((incident) => !["RESOLVED", "CLOSED"].includes(incident.status))
+    .sort((a, b) => b.priorityScore - a.priorityScore)
+    .slice(0, 7);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wide text-signal">Hyderabad Demo Grid</p>
-            <h2 className="mt-1 text-3xl font-bold text-ink">Emergency transcript intelligence dashboard</h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-500">
-              Upload bundled JSON transcripts and watch CrisisWeave store calls, triage incidents, deduplicate reports, assign resources, generate simulated alerts, and log every step.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button type="primary" loading={busy} onClick={runSeed} icon={<Database className="h-4 w-4" />}>Seed</Button>
-            <Button loading={busy} onClick={resetDemo} icon={<RefreshCcw className="h-4 w-4" />}>Reset Demo</Button>
-            <Link href="/upload" className="inline-flex items-center gap-2 rounded-md bg-signal px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800">
-              <FileJson className="h-4 w-4" /> Upload JSON
+    <div>
+      <PageHeader
+        title="Operations overview"
+        description="Hyderabad emergency grid. Every call is read, merged, scored and dispatched by a chain of reasoning agents."
+        actions={
+          <>
+            <Button onClick={() => void runAdmin("/admin/seed", "Hyderabad units seeded.")} disabled={busy}>
+              Seed units
+            </Button>
+            <Button onClick={resetDemo} disabled={busy}>
+              Reset demo
+            </Button>
+            <Link
+              href="/upload"
+              className="inline-flex h-9 items-center rounded border border-teal bg-teal px-3.5 text-sm font-medium text-white hover:bg-teal-dark"
+            >
+              Upload calls
             </Link>
+          </>
+        }
+      />
+
+      {notice ? <p className="-mt-3 mb-5 text-sm text-teal-dark">{notice}</p> : null}
+
+      {!s ? (
+        <LoadingBlock rows={8} />
+      ) : (
+        <div className="space-y-5">
+          <div className="panel grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7">
+            <Stat label="Active incidents" value={s.totalActiveIncidents} />
+            <Stat label="Calls received" value={s.totalIncomingCalls} />
+            <Stat label="Duplicates merged" value={s.duplicateCallsCount} />
+            <Stat label="Units free / busy" value={`${s.availableResources} / ${s.busyResources}`} />
+            <Stat label="Dispatches" value={s.totalDispatches} />
+            <Stat label="Alerts sent" value={s.totalAlerts} />
+            <Stat label="Agent decisions" value={s.totalAgentTraces} href="/agent-traces" />
           </div>
-        </div>
-      </section>
 
-      {!summary ? <DashboardSkeleton /> : null}
+          <AgentChain />
 
-      {summary ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Uploaded Batches" value={summary?.totalUploadedBatches ?? "-"} />
-        <MetricCard label="Incoming Calls" value={summary?.totalIncomingCalls ?? "-"} />
-        <MetricCard label="Active Incidents" value={summary?.totalActiveIncidents ?? "-"} />
-        <MetricCard label="Duplicate Calls" value={summary?.duplicateCallsCount ?? "-"} />
-        <MetricCard label="Available Resources" value={summary?.availableResources ?? "-"} />
-        <MetricCard label="Busy Resources" value={summary?.busyResources ?? "-"} />
-        <MetricCard label="Dispatches" value={summary?.totalDispatches ?? "-"} />
-        <MetricCard label="Alerts" value={summary?.totalAlerts ?? "-"} />
-        <MetricCard label="Agent Decisions" value={summary?.totalAgentTraces ?? "-"} detail="Reasoning steps stored" />
-      </div> : null}
-
-      {summary ? <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <h3 className="flex items-center gap-2 text-lg font-bold text-ink"><ShieldCheck className="h-5 w-5 text-signal" /> Incidents by severity</h3>
-          <div className="mt-4 space-y-2">
-            {(summary?.incidentsBySeverity || []).map((item) => (
-              <div key={item._id} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2">
-                <Badge value={item._id} />
-                <span className="font-bold text-slate-800">{item.count}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <h3 className="text-lg font-bold text-ink">Incidents by type</h3>
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {(summary?.incidentsByType || []).map((item) => (
-              <div key={item._id} className="rounded-md bg-slate-50 px-3 py-2">
-                <p className="text-xs font-semibold text-slate-500">{item._id?.replaceAll("_", " ")}</p>
-                <p className="text-xl font-bold text-ink">{item.count}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      </div> : null}
-
-      {summary ? <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-        <h3 className="text-lg font-bold text-ink">Recent system logs</h3>
-        <div className="mt-4 space-y-3">
-          {(summary?.recentSystemLogs || []).map((log) => (
-            <div key={log._id} className="flex flex-col gap-1 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <Badge value={log.eventType} />
-                <p className="mt-1 text-sm text-slate-700">{log.message}</p>
-              </div>
-              <p className="text-xs text-slate-500">{formatDate(log.createdAt)}</p>
+          {s.totalIncomingCalls === 0 ? (
+            <div className="panel">
+              <EmptyState
+                title="No calls processed yet"
+                hint={
+                  <>
+                    Go to <Link href="/upload" className="text-teal underline">Upload calls</Link> and load the
+                    Hyderabad sample bundle to watch the agents work.
+                  </>
+                }
+              />
             </div>
-          ))}
+          ) : null}
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <div className="min-w-0 lg:col-span-2">
+              <Panel title="City map" aside={<MapLegend />} flush>
+                <CityMap incidents={incidents.data?.items || []} resources={resources.data?.items || []} />
+              </Panel>
+            </div>
+
+            <Panel title="Priority queue" aside={<Link href="/incidents" className="text-xs text-teal hover:underline">All incidents</Link>} flush>
+              {queue.length === 0 ? (
+                <EmptyState title="Queue is clear" />
+              ) : (
+                <ol>
+                  {queue.map((incident) => (
+                    <li key={incident._id} className="border-b border-rule/70 last:border-0">
+                      <Link href={`/incidents/${incident._id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-paper/60">
+                        <span className="w-8 shrink-0 pt-0.5 text-right font-mono text-base font-medium tabular-nums text-ink">
+                          {incident.priorityScore}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-ink">{incident.title}</span>
+                          <span className="mt-0.5 block truncate text-xs text-muted">{incident.locationText || "-"}</span>
+                        </span>
+                        <Badge value={incident.severity} />
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </Panel>
+          </div>
+
+          <div className="grid items-start gap-5 lg:grid-cols-3">
+            <Panel title="By severity">
+              <SeverityBreakdown rows={s.incidentsBySeverity} />
+            </Panel>
+            <Panel title="By type">
+              <TypeBreakdown rows={s.incidentsByType} />
+            </Panel>
+            <Panel title="Activity" aside={<Link href="/system-logs" className="text-xs text-teal hover:underline">Full log</Link>} flush>
+              <ul className="max-h-[260px] overflow-y-auto">
+                {s.recentSystemLogs.map((log) => (
+                  <li key={log._id} className="border-b border-rule/70 px-4 py-2.5 last:border-0">
+                    <p className="text-[13px] leading-snug text-ink">{log.message}</p>
+                    <p className="mt-0.5 font-mono text-[11px] text-muted">
+                      {humanize(log.eventType)} · {timeAgo(log.createdAt)}
+                    </p>
+                  </li>
+                ))}
+                {s.recentSystemLogs.length === 0 ? <EmptyState title="Nothing logged yet" /> : null}
+              </ul>
+            </Panel>
+          </div>
         </div>
-      </section> : null}
+      )}
     </div>
   );
 }
 
-function DashboardSkeleton() {
+function Stat({ label, value, href }: { label: string; value: number | string; href?: string }) {
+  const body = (
+    <>
+      <p className="eyebrow">{label}</p>
+      <p className="mt-1.5 font-mono text-2xl font-medium tabular-nums text-ink">{value}</p>
+    </>
+  );
+  const className = "border-b border-r border-rule px-4 py-3.5 last:border-r-0 xl:border-b-0";
+  return href ? (
+    <Link href={href} className={`${className} hover:bg-paper/60`}>
+      {body}
+    </Link>
+  ) : (
+    <div className={className}>{body}</div>
+  );
+}
+
+function SeverityBreakdown({ rows }: { rows: Array<{ _id: string; count: number }> }) {
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  if (!total) return <p className="text-sm text-muted">No active incidents.</p>;
+  const sorted = SEVERITY_ORDER.map((severity) => ({
+    severity,
+    count: rows.find((row) => row._id === severity)?.count || 0
+  }));
+
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 8 }).map((_, index) => (
-          <div key={index} className="rounded-lg border border-slate-200 bg-white p-4 shadow-soft">
-            <Skeleton active paragraph={{ rows: 1, width: "45%" }} title={{ width: "70%" }} />
+    <div>
+      <div className="flex h-2.5 overflow-hidden rounded-sm bg-paper">
+        {sorted.map((row) =>
+          row.count ? <div key={row.severity} className={severityBar[row.severity]} style={{ width: `${(row.count / total) * 100}%` }} /> : null
+        )}
+      </div>
+      <dl className="mt-4 space-y-2">
+        {sorted.map((row) => (
+          <div key={row.severity} className="flex items-center justify-between">
+            <dt>
+              <Badge value={row.severity} />
+            </dt>
+            <dd className="font-mono text-sm tabular-nums">{row.count}</dd>
           </div>
         ))}
-      </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <Skeleton active paragraph={{ rows: 5 }} title={{ width: "35%" }} />
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <Skeleton active paragraph={{ rows: 5 }} title={{ width: "35%" }} />
-        </div>
-      </div>
+      </dl>
     </div>
+  );
+}
+
+function TypeBreakdown({ rows }: { rows: Array<{ _id: string; count: number }> }) {
+  if (!rows.length) return <p className="text-sm text-muted">No active incidents.</p>;
+  const max = Math.max(...rows.map((row) => row.count));
+  return (
+    <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+      {rows.map((row) => (
+        <li key={row._id}>
+          <div className="flex justify-between text-[13px]">
+            <span>{humanize(row._id)}</span>
+            <span className="font-mono tabular-nums text-muted">{row.count}</span>
+          </div>
+          <div className="mt-1 h-1.5 rounded-sm bg-paper">
+            <div className="h-1.5 rounded-sm bg-slate/50" style={{ width: `${(row.count / max) * 100}%` }} />
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
