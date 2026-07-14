@@ -1,0 +1,128 @@
+{
+  "records": [
+    {
+      "transcript": "There is heavy smoke and fire coming from the second floor of an apartment near Cyber Towers. People are shouting for help.",
+      "date": "2026-04-25",
+      "startTime": "09:05",
+      "endTime": "09:07",
+      "locationText": "Cyber Towers, HITEC City",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.4504,
+      "longitude": 78.3808,
+      "callerName": "Ravi Kumar",
+      "callerPhone": "+91-90000-10001",
+      "sourceId": "HYD-FIRE-001-A"
+    },
+    {
+      "transcript": "Fire and smoke reported again at the same apartment near Cyber Towers. Looks like the flames are spreading.",
+      "date": "2026-04-25",
+      "startTime": "09:12",
+      "endTime": "09:14",
+      "locationText": "Cyber Towers, HITEC City",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.4505,
+      "longitude": 78.381,
+      "callerName": "Anusha Reddy",
+      "callerPhone": "+91-90000-10002",
+      "sourceId": "HYD-FIRE-001-B"
+    },
+    {
+      "transcript": "An elderly man is unconscious and not breathing near KBR Park gate. We need an ambulance immediately.",
+      "date": "2026-04-25",
+      "startTime": "09:20",
+      "endTime": "09:22",
+      "locationText": "KBR Park Gate, Jubilee Hills",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.4156,
+      "longitude": 78.4277,
+      "sourceId": "HYD-MED-001"
+    },
+    {
+      "transcript": "Two cars had a collision near Tank Bund. One person is bleeding and traffic is blocked.",
+      "date": "2026-04-25",
+      "startTime": "09:35",
+      "endTime": "09:37",
+      "locationText": "Tank Bund Road",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.4239,
+      "longitude": 78.4738,
+      "sourceId": "HYD-ACC-001"
+    },
+    {
+      "transcript": "Water is rising near Musi river and two families are stuck inside a house. Need rescue team.",
+      "date": "2026-04-25",
+      "startTime": "10:05",
+      "endTime": "10:08",
+      "locationText": "Musi River, Chaderghat",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.3719,
+      "longitude": 78.4933,
+      "sourceId": "HYD-FLOOD-001"
+    },
+    {
+      "transcript": "A building collapse happened near Charminar. People are trapped under rubble and many injured.",
+      "date": "2026-04-25",
+      "startTime": "10:20",
+      "endTime": "10:23",
+      "locationText": "Near Charminar",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.3616,
+      "longitude": 78.4747,
+      "sourceId": "HYD-COLLAPSE-001"
+    },
+    {
+      "transcript": "There is an intruder inside our home in Banjara Hills and we are hiding in a room.",
+      "date": "2026-04-25",
+      "startTime": "10:45",
+      "endTime": "10:47",
+      "locationText": "Road No. 12, Banjara Hills",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.414,
+      "longitude": 78.4343,
+      "sourceId": "HYD-INTRUSION-001"
+    },
+    {
+      "transcript": "Our missing dog ran away near Jubilee Hills check post. It is a non-critical report but we need animal rescue help.",
+      "date": "2026-04-25",
+      "startTime": "11:00",
+      "endTime": "11:03",
+      "locationText": "Jubilee Hills Check Post",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.4305,
+      "longitude": 78.4082,
+      "sourceId": "HYD-PET-001"
+    },
+    {
+      "transcript": "There is a power outage and a transformer is sparking near Kukatpally main road.",
+      "date": "2026-04-25",
+      "startTime": "11:15",
+      "endTime": "11:18",
+      "locationText": "Kukatpally Main Road",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.4948,
+      "longitude": 78.3996,
+      "sourceId": "HYD-POWER-001"
+    },
+    {
+      "transcript": "Strong gas leak smell in a restaurant kitchen near Gachibowli. Staff evacuated but it feels urgent.",
+      "date": "2026-04-25",
+      "startTime": "11:30",
+      "endTime": "11:32",
+      "locationText": "Gachibowli Restaurant Lane",
+      "city": "Hyderabad",
+      "state": "Telangana",
+      "latitude": 17.4401,
+      "longitude": 78.3489,
+      "sourceId": "HYD-GAS-001"
+    }
+  ]
+}
