@@ -1,15 +1,17 @@
 "use client";
 
-// Incident detail page ties raw calls, agent reasoning, resources, dispatches,
-// and alerts together while polling for live ETA/progress changes.
-import { useEffect, useRef, useState } from "react";
+// Incident detail: everything about one incident on one page. The calls that
+// reported it, the agent run that handled it, the units sent and the alerts raised.
+import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Alert, Skeleton } from "antd";
-import { apiGet } from "../../../lib/api";
-import { Badge } from "../../../components/Badge";
-import { DataTable } from "../../../components/DataTable";
-import { friendlyTraceText } from "../../../lib/traceText";
+import { formatDate, formatTime, humanize } from "../../../lib/format";
 import { liveEtaText } from "../../../lib/liveEta";
+import { usePolling } from "../../../lib/usePolling";
+import { Badge } from "../../../components/Badge";
+import { CityMap } from "../../../components/CityMap";
+import { Code } from "../../../components/DataTable";
+import { TraceStep, type Trace } from "../../../components/TraceStep";
+import { EmptyState, ErrorState, LoadingBlock, Panel } from "../../../components/ui";
 
 type Detail = {
   incident: any;
@@ -17,135 +19,154 @@ type Detail = {
   assignedResources: any[];
   dispatches: any[];
   alerts: any[];
-  agentTraces: any[];
+  agentTraces: Trace[];
 };
 
 export default function IncidentDetailPage() {
   const params = useParams<{ id: string }>();
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const lastDetailSnapshot = useRef("");
+  const { data, error, reload } = usePolling<{ ok: boolean; data: Detail }>(`/incidents/${params.id}`);
 
-  useEffect(() => {
-    let active = true;
+  if (error) return <ErrorState message={error} onRetry={reload} />;
+  if (!data) return <LoadingBlock rows={10} />;
 
-    const load = (initial = false) => {
-      apiGet<{ ok: boolean; data: Detail }>(`/incidents/${params.id}`)
-        .then((response) => {
-          if (!active) return;
-          const nextSnapshot = JSON.stringify(response.data);
-          if (nextSnapshot !== lastDetailSnapshot.current) {
-            lastDetailSnapshot.current = nextSnapshot;
-            setDetail(response.data);
-          }
-          setError(null);
-        })
-        .catch((err) => {
-          if (!active) return;
-          if (initial || !lastDetailSnapshot.current) {
-            setError(err instanceof Error ? err.message : "Failed to load incident");
-          }
-        });
-    };
+  const { incident, incomingCalls, assignedResources, dispatches, alerts, agentTraces } = data.data;
 
-    load(true);
-    const timer = window.setInterval(() => load(false), 3000);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-    };
-  }, [params.id]);
-
-  if (error) return <Alert type="error" message="Incident failed to load" description={error} showIcon />;
-  if (!detail) {
-    return (
-      <div className="space-y-4">
-        <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
-          <Skeleton active paragraph={{ rows: 4 }} title={{ width: "45%" }} />
-        </div>
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-soft">
-          <Skeleton active paragraph={{ rows: 8 }} title={{ width: "30%" }} />
-        </div>
-      </div>
-    );
+  // Group steps by graph run (one run per call), keeping the order they happened in.
+  const runs: Trace[][] = [];
+  for (const trace of agentTraces) {
+    const run = runs.find((steps) => steps[0].graphRunId === trace.graphRunId);
+    if (run) run.push(trace);
+    else runs.push([trace]);
   }
 
-  const incident = detail.incident;
-
   return (
-    <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-soft">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-signal">{incident.incidentCode}</p>
-            <h2 className="mt-1 text-3xl font-bold text-ink">{incident.title}</h2>
-            <p className="mt-2 max-w-3xl text-sm text-slate-600">{incident.description}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Badge value={incident.incidentType} />
-            <Badge value={incident.severity} />
-            <Badge value={incident.status} />
-          </div>
+    <div>
+      <Link href="/incidents" className="text-xs text-muted hover:text-ink">
+        ← Incidents
+      </Link>
+
+      <div className="mb-6 mt-2 border-b border-rule pb-5">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Code>{incident.incidentCode}</Code>
+          <Badge value={incident.severity} />
+          <Badge value={incident.status} />
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-4">
-          <div className="rounded-md bg-slate-50 p-3"><p className="text-xs text-slate-500">Priority</p><p className="text-xl font-bold">{incident.priorityScore}</p></div>
-          <div className="rounded-md bg-slate-50 p-3"><p className="text-xs text-slate-500">Duplicates</p><p className="text-xl font-bold">{incident.duplicateCount}</p></div>
-          <div className="rounded-md bg-slate-50 p-3"><p className="text-xs text-slate-500">Resources</p><p className="text-xl font-bold">{detail.assignedResources.length}</p></div>
-          <div className="rounded-md bg-slate-50 p-3"><p className="text-xs text-slate-500">Alerts</p><p className="text-xl font-bold">{detail.alerts.length}</p></div>
+        <h1 className="mt-2 text-[22px] font-semibold tracking-tight">{incident.title}</h1>
+        <p className="mt-1 text-sm text-muted">
+          {humanize(incident.incidentType)} · {incident.locationText || incident.city || "Unknown location"} · first
+          reported {formatDate(incident.firstReportedAt || incident.createdAt)}
+        </p>
+      </div>
+
+      <div className="panel mb-5 grid grid-cols-2 sm:grid-cols-4">
+        <Fact label="Priority" value={incident.priorityScore} />
+        <Fact label="Calls about it" value={incomingCalls.length} />
+        <Fact label="Units sent" value={assignedResources.length} />
+        <Fact label="Alerts raised" value={alerts.length} />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <Panel title="How the agents handled it">
+            {runs.length ? (
+              <div className="space-y-6">
+                {runs.map((run, runIndex) => (
+                  <div key={run[0].graphRunId}>
+                    {/* Every call about this incident gets its own run; later ones usually stop at Dedup. */}
+                    {runs.length > 1 ? (
+                      <p className="eyebrow mb-3">
+                        Call {runIndex + 1} · {runIndex === 0 ? "created the incident" : "merged as a duplicate"}
+                      </p>
+                    ) : null}
+                    <ol>
+                      {run.map((trace, index) => (
+                        <TraceStep key={trace._id} trace={trace} last={index === run.length - 1} />
+                      ))}
+                    </ol>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="No agent steps recorded" />
+            )}
+          </Panel>
         </div>
-      </section>
 
-      <section>
-        <h3 className="mb-3 text-lg font-bold text-ink">Agent execution trace</h3>
-        <DataTable
-          rows={detail.agentTraces}
-          columns={[
-            { key: "step", label: "Step", render: (row: any) => `${row.stepIndex}${row.retryAttempt ? ` / retry ${row.retryAttempt}` : ""}` },
-            { key: "agent", label: "Agent", render: (row: any) => <Badge value={row.agentName} /> },
-            { key: "decision", label: "Decision", render: (row: any) => friendlyTraceText(row.decision) },
-            { key: "reasoning", label: "Reasoning", render: (row: any) => friendlyTraceText(row.reasoning) },
-            { key: "critique", label: "Critique", render: (row: any) => friendlyTraceText(row.critique) }
-          ]}
-        />
-      </section>
+        <div className="space-y-5 lg:col-span-2">
+          <Panel title="Location" flush>
+            <CityMap incidents={[incident]} resources={assignedResources} height={240} />
+          </Panel>
 
-      <section>
-        <h3 className="mb-3 text-lg font-bold text-ink">Linked raw transcripts</h3>
-        <DataTable
-          rows={detail.incomingCalls}
-          columns={[
-            { key: "status", label: "Status", render: (row: any) => <Badge value={row.processingStatus} /> },
-            { key: "transcript", label: "Transcript", render: (row: any) => row.rawTranscript },
-            { key: "duplicate", label: "Duplicate", render: (row: any) => (row.isDuplicate ? "Yes" : "No") }
-          ]}
-        />
-      </section>
+          <Panel title={`Calls (${incomingCalls.length})`} flush>
+            <ul>
+              {incomingCalls.map((call) => (
+                <li key={call._id} className="border-b border-rule/70 px-4 py-3 last:border-0">
+                  <p className="text-[13px] leading-relaxed text-ink">&ldquo;{call.rawTranscript}&rdquo;</p>
+                  <p className="mt-1.5 flex flex-wrap items-center gap-2 text-xs text-muted">
+                    <span>{call.callerName || "Anonymous caller"}</span>
+                    <span>·</span>
+                    <span className="font-mono">{call.startTime || formatTime(call.createdAt)}</span>
+                    {call.isDuplicate ? <Badge value="DUPLICATE" /> : null}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Panel>
 
-      <section>
-        <h3 className="mb-3 text-lg font-bold text-ink">Dispatch decisions</h3>
-        <DataTable
-          rows={detail.dispatches}
-          columns={[
-            { key: "code", label: "Code", render: (row: any) => row.dispatchCode },
-            { key: "type", label: "Type", render: (row: any) => <Badge value={row.resourceType} /> },
-            { key: "eta", label: "Live ETA", render: (row: any) => liveEtaText(row.dispatchedAt, row.estimatedArrivalMinutes) },
-            { key: "reason", label: "Decision Reason", render: (row: any) => row.decisionReason }
-          ]}
-        />
-      </section>
+          <Panel title="Dispatched units" flush>
+            {dispatches.length ? (
+              <ul>
+                {dispatches.map((dispatch) => {
+                  const unit = assignedResources.find((resource) => resource._id === dispatch.resourceId);
+                  return (
+                    <li key={dispatch._id} className="border-b border-rule/70 px-4 py-3 last:border-0">
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-sm font-medium">{unit?.name || humanize(dispatch.resourceType)}</span>
+                        <span className="whitespace-nowrap font-mono text-xs text-teal-dark">
+                          {liveEtaText(dispatch.dispatchedAt, dispatch.estimatedArrivalMinutes)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted">
+                        {humanize(dispatch.resourceType)} · {dispatch.distanceKm} km · <Code>{dispatch.dispatchCode}</Code>
+                      </p>
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate">{dispatch.decisionReason}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <EmptyState title="No units dispatched" hint="No matching unit was free when this incident came in." />
+            )}
+          </Panel>
 
-      <section>
-        <h3 className="mb-3 text-lg font-bold text-ink">Alerts generated</h3>
-        <DataTable
-          rows={detail.alerts}
-          columns={[
-            { key: "code", label: "Code", render: (row: any) => row.alertCode },
-            { key: "type", label: "Type", render: (row: any) => <Badge value={row.alertType} /> },
-            { key: "target", label: "Target", render: (row: any) => row.targetOrganization },
-            { key: "status", label: "Status", render: (row: any) => <Badge value={row.status} /> }
-          ]}
-        />
-      </section>
+          <Panel title="Alerts" flush>
+            {alerts.length ? (
+              <ul>
+                {alerts.map((alert) => (
+                  <li key={alert._id} className="flex items-start justify-between gap-3 border-b border-rule/70 px-4 py-3 last:border-0">
+                    <div>
+                      <p className="text-sm">{alert.targetOrganization}</p>
+                      <p className="text-xs text-muted">{humanize(alert.alertType)}</p>
+                    </div>
+                    <Badge value={alert.status} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <EmptyState title="No alerts raised" />
+            )}
+          </Panel>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Fact({ label, value }: { label: string; value: number | string }) {
+  return (
+    <div className="border-r border-rule px-4 py-3 last:border-r-0">
+      <p className="eyebrow">{label}</p>
+      <p className="mt-1 font-mono text-xl tabular-nums">{value ?? "-"}</p>
     </div>
   );
 }

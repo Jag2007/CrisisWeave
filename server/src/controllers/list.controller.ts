@@ -37,7 +37,7 @@ export async function incidentDetail(req: Request, res: Response, next: NextFunc
         assignedResources,
         dispatches,
         alerts,
-        agentTraces: await AgentTrace.find({ incidentId: incident._id }).sort({ stepIndex: 1 }).lean()
+        agentTraces: await AgentTrace.find({ incidentId: incident._id }).sort({ createdAt: 1, stepIndex: 1 }).lean()
       }
     });
   } catch (error) {
