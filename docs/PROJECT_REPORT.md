@@ -288,4 +288,4 @@ Date and ID formatting helpers.
 - It is resilient: Groq, then OpenAI, then local fallback.
 - It is agentic: the system plans, executes, critiques, and refines.
 - It is demo-ready: seed, upload, inspect dashboard.
-- It is easy to judge: the frontend uses Ant Design loaders/progress states and plain-language trace text.
+- It is easy to judge: the frontend shows live progress, a city map and plain-language agent traces.

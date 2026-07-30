@@ -4,7 +4,7 @@
 
 ```mermaid
 flowchart LR
-  Judge["Judge / User"] --> Client["Next.js + Tailwind + Ant Design Dashboard"]
+  Judge["Judge / User"] --> Client["Next.js + Tailwind + Leaflet Dashboard"]
   Client --> UploadAPI["POST /api/uploads/json"]
   Client -- "poll every 3s for live progress" --> ReadAPIs["Dashboard + Admin Data APIs"]
 
